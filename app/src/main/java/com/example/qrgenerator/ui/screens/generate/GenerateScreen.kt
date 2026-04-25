@@ -1,5 +1,6 @@
 package com.example.qrgenerator.ui.screens.generate
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,19 +23,30 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.koin.androidx.compose.koinViewModel
 import com.example.qrgenerator.ui.components.ContentTypeChipGroup
 import com.example.qrgenerator.ui.components.ErrorDialog
 import com.example.qrgenerator.ui.components.QrCodeDisplay
 
 /** 生成页面 */
 @Composable
-fun GenerateScreen(viewModel: GenerateViewModel = viewModel()) {
-    val uiState by viewModel.uiState.collectAsState()
+fun GenerateScreen(viewModel: GenerateViewModel = koinViewModel()) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // 处理分享 Intent
+    LaunchedEffect(uiState.shareIntent) {
+        uiState.shareIntent?.let { intent ->
+            context.startActivity(Intent.createChooser(intent, "分享二维码"))
+            viewModel.executeClearShareIntent()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -81,7 +93,7 @@ fun GenerateScreen(viewModel: GenerateViewModel = viewModel()) {
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Button(
-                onClick = { /* 保存逻辑 */ },
+                onClick = { viewModel.executeSaveToGallery() },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(
@@ -94,7 +106,7 @@ fun GenerateScreen(viewModel: GenerateViewModel = viewModel()) {
                 Text(" 保存")
             }
             Button(
-                onClick = { /* 分享逻辑 */ },
+                onClick = { viewModel.executeShare() },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(

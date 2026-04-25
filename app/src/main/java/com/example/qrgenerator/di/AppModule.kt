@@ -4,6 +4,7 @@ import com.example.qrgenerator.data.local.QrHistoryDatabase
 import com.example.qrgenerator.data.local.SettingsDataStore
 import com.example.qrgenerator.data.repository.QrHistoryRepository
 import com.example.qrgenerator.data.repository.SettingsRepository
+import com.example.qrgenerator.domain.ExportUseCase
 import com.example.qrgenerator.domain.QrGeneratorUseCase
 import com.example.qrgenerator.ui.screens.generate.GenerateViewModel
 import com.example.qrgenerator.ui.screens.history.HistoryViewModel
@@ -28,9 +29,10 @@ val appModule = module {
 
     // UseCase
     single { QrGeneratorUseCase() }
+    single { ExportUseCase(androidContext()) }
 
     // ViewModel
-    viewModel { GenerateViewModel(get()) }
+    viewModel { GenerateViewModel(get(), get()) }
     viewModel { StyleViewModel() }
     viewModel { HistoryViewModel(get()) }
     viewModel { SettingsViewModel(get()) }
