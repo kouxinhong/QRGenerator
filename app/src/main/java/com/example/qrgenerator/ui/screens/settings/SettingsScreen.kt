@@ -163,6 +163,7 @@ private fun SettingsItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SingleChoiceDialog(
     title: String,

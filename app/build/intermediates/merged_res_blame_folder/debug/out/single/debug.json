@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.example.qrgenerator.app-merged_res-66:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.example.qrgenerator.app-main-68:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.example.qrgenerator.app-merged_res-66:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.example.qrgenerator.app-main-68:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.example.qrgenerator.app-merged_res-66:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.example.qrgenerator.app-main-68:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "/Users/kouxinhong/.gradle/daemon/8.2/com.example.qrgenerator.app-merged_res-66:/xml_file_paths.xml.flat",
+        "source": "/Users/kouxinhong/.gradle/daemon/8.2/com.example.qrgenerator.app-main-68:/xml/file_paths.xml"
+    }
+]

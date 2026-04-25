@@ -37,12 +37,11 @@ class QrGeneratorUseCase {
         padding = config.padding
         errorCorrectionLevel = mapErrorLevel(config.errorCorrectionLevel)
         fourthEyeEnabled = config.fourthEyeEnabled
-        shapes {
+        shapes(centralSymmetry = config.centralSymmetry) {
             darkPixel = mapPixelShape(config.darkPixelShape)
             lightPixel = mapPixelShape(config.lightPixelShape)
             ball = mapBallShape(config.ballShape)
             frame = mapFrameShape(config.frameShape)
-            centralSymmetry = config.centralSymmetry
         }
         colors {
             dark = mapColor(config.darkColor)

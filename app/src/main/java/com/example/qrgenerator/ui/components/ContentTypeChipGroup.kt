@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
@@ -15,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.example.qrgenerator.data.model.QrContentType
 
 /** 内容类型 chip 选择组（横向滚动） */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContentTypeChipGroup(
     selectedType: QrContentType,
