@@ -12,9 +12,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.qrgenerator.data.QrBallShapeType
-import com.example.qrgenerator.data.QrFrameShapeType
-import com.example.qrgenerator.data.QrPixelShapeType
+import com.example.qrgenerator.data.model.QrBallShapeType
+import com.example.qrgenerator.data.model.QrFrameShapeType
+import com.example.qrgenerator.data.model.QrPixelShapeType
 
 /**
  * 模块形状选择器

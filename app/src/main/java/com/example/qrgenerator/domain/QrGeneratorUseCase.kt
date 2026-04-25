@@ -1,14 +1,14 @@
 package com.example.qrgenerator.domain
 
 import android.graphics.drawable.Drawable
-import com.example.qrgenerator.data.GradientOrientation
-import com.example.qrgenerator.data.LogoPaddingType
-import com.example.qrgenerator.data.QrBallShapeType
-import com.example.qrgenerator.data.QrConfig
-import com.example.qrgenerator.data.QrContentType
-import com.example.qrgenerator.data.QrErrorLevel
-import com.example.qrgenerator.data.QrFrameShapeType
-import com.example.qrgenerator.data.QrPixelShapeType
+import com.example.qrgenerator.data.model.GradientOrientation
+import com.example.qrgenerator.data.model.LogoPaddingType
+import com.example.qrgenerator.data.model.QrBallShapeType
+import com.example.qrgenerator.data.model.QrConfig
+import com.example.qrgenerator.data.model.QrContentType
+import com.example.qrgenerator.data.model.QrErrorLevel
+import com.example.qrgenerator.data.model.QrFrameShapeType
+import com.example.qrgenerator.data.model.QrPixelShapeType
 import com.github.alexzhirkevich.customqrgenerator.QrData
 import com.github.alexzhirkevich.customqrgenerator.QrErrorCorrectionLevel
 import com.github.alexzhirkevich.customqrgenerator.vector.QrCodeDrawable
