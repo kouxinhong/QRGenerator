@@ -81,6 +81,9 @@ dependencies {
     // JSON 序列化
     implementation("com.google.code.gson:gson:2.10.1")
 
+    // Coil (图片加载)
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

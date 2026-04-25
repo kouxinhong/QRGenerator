@@ -14,24 +14,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.graphics.drawable.toDrawable
 
-/**
- * QR 码显示组件
- * 使用 AndroidView 渲染 QR 码 Drawable
- *
- * @param qrDrawable QR 码 Drawable
- * @param backgroundColor 背景色
- * @param isGenerating 是否正在生成
- * @param modifier 修饰符
- */
+/** QR 码预览组件 */
 @Composable
 fun QrCodeDisplay(
     qrDrawable: Drawable?,
-    backgroundColor: Int,
     isGenerating: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -40,15 +29,13 @@ fun QrCodeDisplay(
             .fillMaxWidth()
             .aspectRatio(1f)
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
         when {
             isGenerating -> {
-                CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.primary
-                )
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
             qrDrawable != null -> {
                 AndroidView(
@@ -57,19 +44,15 @@ fun QrCodeDisplay(
                             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
                         }
                     },
-                    update = { imageView ->
-                        imageView.setImageDrawable(qrDrawable)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
+                    update = { it.setImageDrawable(qrDrawable) },
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                 )
             }
             else -> {
                 Text(
-                    text = "输入内容后点击生成",
+                    text = "输入内容后自动生成",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

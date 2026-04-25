@@ -12,70 +12,48 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-/**
- * 暗色主题配色方案
- */
 private val DarkColorScheme = darkColorScheme(
-    primary = XiaomiOrange,
-    onPrimary = Color.White,
-    primaryContainer = XiaomiOrangeDark,
+    primary = Color.White,
+    onPrimary = Color.Black,
+    primaryContainer = MimoDarkCard,
     onPrimaryContainer = Color.White,
-    secondary = XiaomiOrangeLight,
-    onSecondary = Color.White,
-    secondaryContainer = DarkSurfaceVariant,
-    onSecondaryContainer = DarkOnSurface,
-    tertiary = Info,
-    onTertiary = Color.White,
-    background = DarkBackground,
-    onBackground = DarkOnBackground,
-    surface = DarkSurface,
-    onSurface = DarkOnSurface,
-    surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = DarkOnBackground,
-    outline = DarkDivider,
-    error = Error,
-    onError = Color.White
+    secondary = Color.White,
+    onSecondary = Color.Black,
+    background = MimoBlack,
+    onBackground = MimoDarkText,
+    surface = MimoDarkSurface,
+    onSurface = MimoDarkText,
+    surfaceVariant = MimoDarkCard,
+    onSurfaceVariant = MimoDarkTextSecondary,
+    outline = MimoDarkDivider,
+    error = Color(0xFFCF6679),
+    onError = Color.Black
 )
 
-/**
- * 亮色主题配色方案
- */
 private val LightColorScheme = lightColorScheme(
-    primary = XiaomiOrange,
+    primary = Color.Black,
     onPrimary = Color.White,
-    primaryContainer = XiaomiOrangeLight,
-    onPrimaryContainer = Color.White,
-    secondary = XiaomiOrangeDark,
+    primaryContainer = MimoLightSurface,
+    onPrimaryContainer = Color.Black,
+    secondary = Color.Black,
     onSecondary = Color.White,
-    secondaryContainer = LightSurfaceVariant,
-    onSecondaryContainer = LightOnSurface,
-    tertiary = Info,
-    onTertiary = Color.White,
-    background = LightBackground,
-    onBackground = LightOnBackground,
-    surface = LightSurface,
-    onSurface = LightOnSurface,
-    surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = LightOnBackground,
-    outline = LightDivider,
-    error = Error,
+    background = MimoWhite,
+    onBackground = MimoLightText,
+    surface = MimoWhite,
+    onSurface = MimoLightText,
+    surfaceVariant = MimoLightSurface,
+    onSurfaceVariant = MimoLightTextSecondary,
+    outline = MimoLightDivider,
+    error = Color(0xFFB00020),
     onError = Color.White
 )
 
-/**
- * QR 生成器主题
- * 参考 MIMO 小米社区的简洁设计风格
- *
- * @param darkTheme 是否使用暗色主题
- * @param content 内容 Composable
- */
 @Composable
 fun QRGeneratorTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -84,10 +62,5 @@ fun QRGeneratorTheme(
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }

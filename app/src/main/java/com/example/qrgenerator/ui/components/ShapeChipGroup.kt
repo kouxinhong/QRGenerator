@@ -12,38 +12,33 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.qrgenerator.data.model.QrErrorLevel
 
-/**
- * 容错级别选择器
- *
- * @param selectedLevel 当前选中的级别
- * @param onLevelSelected 级别选择回调
- * @param modifier 修饰符
- */
+/** 通用形状选择 chip 组 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ErrorLevelSelector(
-    selectedLevel: QrErrorLevel,
-    onLevelSelected: (QrErrorLevel) -> Unit,
+fun <T> ShapeChipGroup(
+    title: String,
+    options: List<T>,
+    selected: T,
+    displayName: (T) -> String,
+    onSelected: (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
         Text(
-            text = "容错级别",
+            text = title,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            QrErrorLevel.entries.forEach { level ->
+            options.forEach { option ->
                 FilterChip(
-                    selected = selectedLevel == level,
-                    onClick = { onLevelSelected(level) },
-                    label = { Text(level.displayName) },
+                    selected = selected == option,
+                    onClick = { onSelected(option) },
+                    label = { Text(displayName(option)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
