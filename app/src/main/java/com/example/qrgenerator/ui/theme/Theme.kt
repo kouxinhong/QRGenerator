@@ -13,12 +13,12 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color.White,
-    onPrimary = Color.Black,
-    primaryContainer = MimoDarkCard,
+    primary = BrandOrange,
+    onPrimary = Color.White,
+    primaryContainer = BrandOrangeDark,
     onPrimaryContainer = Color.White,
-    secondary = Color.White,
-    onSecondary = Color.Black,
+    secondary = MimoDarkText,
+    onSecondary = MimoBlack,
     background = MimoBlack,
     onBackground = MimoDarkText,
     surface = MimoDarkSurface,
@@ -31,12 +31,12 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color.Black,
+    primary = BrandOrange,
     onPrimary = Color.White,
-    primaryContainer = MimoLightSurface,
-    onPrimaryContainer = Color.Black,
-    secondary = Color.Black,
-    onSecondary = Color.White,
+    primaryContainer = BrandOrangeLight,
+    onPrimaryContainer = Color.White,
+    secondary = MimoLightText,
+    onSecondary = MimoWhite,
     background = MimoWhite,
     onBackground = MimoLightText,
     surface = MimoWhite,

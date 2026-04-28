@@ -14,6 +14,10 @@ class StyleViewModel : ViewModel() {
         QrConfigHolder.executeUpdateConfig { it.copy(darkPixelShape = shape) }
     }
 
+    fun executeUpdateLightPixelShape(shape: QrPixelShapeType) {
+        QrConfigHolder.executeUpdateConfig { it.copy(lightPixelShape = shape) }
+    }
+
     fun executeUpdateBallShape(shape: QrBallShapeType) {
         QrConfigHolder.executeUpdateConfig { it.copy(ballShape = shape) }
     }

@@ -34,47 +34,69 @@ fun ExportDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
         title = {
-            Text(text = "导出二维码", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                text = "导出二维码",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         },
         text = {
             Column {
-                Text(text = "选择导出格式", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "选择导出格式",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(modifier = Modifier.height(12.dp))
                 ExportFormat.entries.forEach { format ->
                     FilterChip(
                         selected = selectedFormat == format,
                         onClick = { selectedFormat = format },
-                        label = { Text(format.displayName) },
+                        label = {
+                            Text(
+                                format.displayName,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                         )
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = { onExport(selectedFormat) },
-                shape = RoundedCornerShape(50),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Text("导出")
+                Text(
+                    "导出",
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
         },
         dismissButton = {
             Button(
                 onClick = onDismiss,
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.outlinedButtonColors()
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             ) {
-                Text("取消")
+                Text(
+                    "取消",
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
         }
     )

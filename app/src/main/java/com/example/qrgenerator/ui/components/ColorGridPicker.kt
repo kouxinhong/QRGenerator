@@ -1,5 +1,9 @@
 package com.example.qrgenerator.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,18 +18,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
-
-/** 预设颜色 */
-private val presetColors = listOf(
-    Color.Black, Color.White, Color(0xFF333333), Color(0xFF666666),
-    Color(0xFF999999), Color(0xFFCCCCCC), Color(0xFFE53935), Color(0xFF43A047),
-    Color(0xFF1E88E5), Color(0xFF8E24AA), Color(0xFFFDD835), Color(0xFF00ACC1),
-)
+import com.example.qrgenerator.ui.theme.PresetColors
 
 /** 颜色网格选择器 */
 @OptIn(ExperimentalLayoutApi::class)
@@ -36,28 +35,53 @@ fun ColorGridPicker(
     onColorSelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val primary = MaterialTheme.colorScheme.primary
+
     Column(modifier = modifier) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 10.dp)
         )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            presetColors.forEach { color ->
+            PresetColors.forEach { color ->
                 val colorInt = color.toArgb()
+                val isSelected = selectedColor == colorInt
+                val borderColor by animateColorAsState(
+                    targetValue = if (isSelected) primary else Color.Transparent,
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                    label = "colorBorderColor"
+                )
+                val borderWidth by animateDpAsState(
+                    targetValue = if (isSelected) 3.dp else 1.5.dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                    label = "colorBorderWidth"
+                )
+                val size by animateDpAsState(
+                    targetValue = if (isSelected) 40.dp else 36.dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                    label = "colorSize"
+                )
+
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(size)
                         .clip(CircleShape)
                         .background(color)
+                        .border(borderWidth, borderColor, CircleShape)
                         .then(
-                            if (selectedColor == colorInt) {
-                                Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                            if (!isSelected) {
+                                Modifier.border(
+                                    0.5.dp,
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                    CircleShape
+                                )
                             } else {
-                                Modifier.border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                Modifier
                             }
                         )
                         .clickable { onColorSelected(colorInt) }

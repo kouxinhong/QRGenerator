@@ -7,12 +7,13 @@ import com.github.alexzhirkevich.customqrgenerator.QrErrorCorrectionLevel
 import com.github.alexzhirkevich.customqrgenerator.vector.QrCodeDrawable
 import com.github.alexzhirkevich.customqrgenerator.vector.createQrVectorOptions
 import com.github.alexzhirkevich.customqrgenerator.vector.style.*
+import java.nio.charset.Charset
 
 class QrGeneratorUseCase {
     fun execute(config: QrConfig): Drawable {
         val qrData = mapQrData(config)
         val options = mapQrOptions(config)
-        return QrCodeDrawable(qrData, options)
+        return QrCodeDrawable(qrData, options, Charsets.UTF_8)
     }
 
     internal fun mapQrData(config: QrConfig): QrData = when (config.contentType) {

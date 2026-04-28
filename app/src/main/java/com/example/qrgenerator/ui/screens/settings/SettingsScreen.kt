@@ -1,5 +1,9 @@
 package com.example.qrgenerator.ui.screens.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,19 +12,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,46 +54,71 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel()) {
     var showErrorDialog by remember { mutableStateOf(false) }
     var showFormatDialog by remember { mutableStateOf(false) }
 
+    var isLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isLoaded = true }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        TopAppBar(title = { Text("设置") })
+        TopAppBar(
+            title = {
+                Text(
+                    "设置",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         // 主题模式
-        SettingsItem(
+        AnimatedSettingsItem(
             title = "主题模式",
             subtitle = settings.themeMode.displayName,
-            onClick = { showThemeDialog = true }
+            onClick = { showThemeDialog = true },
+            isVisible = isLoaded,
+            delayMillis = 0
         )
 
         // 默认容错级别
-        SettingsItem(
+        AnimatedSettingsItem(
             title = "默认容错级别",
             subtitle = settings.defaultErrorLevel.displayName,
-            onClick = { showErrorDialog = true }
+            onClick = { showErrorDialog = true },
+            isVisible = isLoaded,
+            delayMillis = 60
         )
 
         // 默认导出格式
-        SettingsItem(
+        AnimatedSettingsItem(
             title = "默认导出格式",
             subtitle = settings.defaultExportFormat.displayName,
-            onClick = { showFormatDialog = true }
+            onClick = { showFormatDialog = true },
+            isVisible = isLoaded,
+            delayMillis = 120
         )
 
         // 默认图片尺寸
-        SettingsItem(
+        AnimatedSettingsItem(
             title = "默认图片尺寸",
             subtitle = "${settings.defaultImageSize} x ${settings.defaultImageSize}",
-            onClick = { }
+            onClick = { },
+            isVisible = isLoaded,
+            delayMillis = 180
         )
 
         // 关于
-        SettingsItem(
+        AnimatedSettingsItem(
             title = "关于",
             subtitle = "版本 1.0.0",
-            onClick = { }
+            onClick = { },
+            isVisible = isLoaded,
+            delayMillis = 240
         )
     }
 
@@ -129,6 +165,30 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel()) {
     }
 }
 
+/** 带入场动画的设置项 */
+@Composable
+private fun AnimatedSettingsItem(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    isVisible: Boolean,
+    delayMillis: Int
+) {
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(tween(350, delayMillis = delayMillis)) + slideInVertically(
+            tween(350, delayMillis = delayMillis),
+            initialOffsetY = { it / 10 }
+        )
+    ) {
+        SettingsItem(
+            title = title,
+            subtitle = subtitle,
+            onClick = onClick
+        )
+    }
+}
+
 @Composable
 private fun SettingsItem(
     title: String,
@@ -138,27 +198,40 @@ private fun SettingsItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 20.dp, vertical = 4.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+            )
         }
     }
 }
@@ -175,21 +248,34 @@ private fun SingleChoiceDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(20.dp),
-        title = { Text(title) },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
         text = {
             Column {
                 options.forEachIndexed { index, option ->
                     FilterChip(
                         selected = selectedIndex == index,
                         onClick = { onSelect(index) },
-                        label = { Text(option) },
+                        label = {
+                            Text(
+                                option,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
+                            .padding(vertical = 3.dp),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        )
+                        ),
+                        border = null
                     )
                 }
             }
