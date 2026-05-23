@@ -38,18 +38,20 @@ data class GenerateUiState(
 class GenerateViewModel(
     private val qrGeneratorUseCase: QrGeneratorUseCase,
     private val exportUseCase: ExportUseCase,
-    private val contentValidator: ContentValidator
+    private val contentValidator: ContentValidator,
+    private val qrConfigHolder: QrConfigHolder
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GenerateUiState())
     val uiState: StateFlow<GenerateUiState> = _uiState.asStateFlow()
 
     private var generateJob: Job? = null
+    private var cachedBitmap: android.graphics.Bitmap? = null
 
     init {
         // 监听共享配置变更（来自样式页面）
         viewModelScope.launch {
-            QrConfigHolder.config.collect { sharedConfig ->
+            qrConfigHolder.config.collect { sharedConfig ->
                 _uiState.update { it.copy(config = sharedConfig) }
                 executeDebounceGenerate()
             }
@@ -60,14 +62,14 @@ class GenerateViewModel(
     fun executeUpdateContentType(type: QrContentType) {
         val newConfig = _uiState.value.config.copy(contentType = type, content = "")
         _uiState.update { it.copy(config = newConfig) }
-        QrConfigHolder.executeSetConfig(newConfig)
+        qrConfigHolder.executeSetConfig(newConfig)
     }
 
     /** 更新内容文本（防抖由 QrConfigHolder.collect 统一触发） */
     fun executeUpdateContent(content: String) {
         val newConfig = _uiState.value.config.copy(content = content)
         _uiState.update { it.copy(config = newConfig) }
-        QrConfigHolder.executeSetConfig(newConfig)
+        qrConfigHolder.executeSetConfig(newConfig)
     }
 
     /** 防抖生成（300ms 延迟） */
@@ -83,11 +85,13 @@ class GenerateViewModel(
     fun executeGenerate() {
         val config = _uiState.value.config
         if (config.content.isBlank()) {
+            cachedBitmap = null
             _uiState.update { it.copy(qrDrawable = null, isGenerating = false, errorMessage = null) }
             return
         }
         val validation = contentValidator.validate(config.contentType, config.content)
         if (validation is ValidationResult.Invalid) {
+            cachedBitmap = null
             _uiState.update { it.copy(qrDrawable = null, isGenerating = false, errorMessage = validation.message) }
             return
         }
@@ -97,8 +101,12 @@ class GenerateViewModel(
                 val drawable = withContext(Dispatchers.Default) {
                     qrGeneratorUseCase.execute(config)
                 }
+                cachedBitmap = withContext(Dispatchers.Default) {
+                    exportUseCase.executeDrawableToBitmap(drawable)
+                }
                 _uiState.update { it.copy(qrDrawable = drawable, isGenerating = false) }
             } catch (e: Exception) {
+                cachedBitmap = null
                 _uiState.update {
                     it.copy(
                         qrDrawable = null,
@@ -112,12 +120,9 @@ class GenerateViewModel(
 
     /** 保存二维码到相册 */
     fun executeSaveToGallery() {
-        val drawable = _uiState.value.qrDrawable ?: return
+        val bitmap = cachedBitmap ?: return
         viewModelScope.launch {
             try {
-                val bitmap = withContext(Dispatchers.Default) {
-                    exportUseCase.executeDrawableToBitmap(drawable)
-                }
                 val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
                 val filename = "QR_$timestamp.png"
                 val uri = withContext(Dispatchers.IO) {
@@ -136,12 +141,9 @@ class GenerateViewModel(
 
     /** 分享二维码 */
     fun executeShare() {
-        val drawable = _uiState.value.qrDrawable ?: return
+        val bitmap = cachedBitmap ?: return
         viewModelScope.launch {
             try {
-                val bitmap = withContext(Dispatchers.Default) {
-                    exportUseCase.executeDrawableToBitmap(drawable)
-                }
                 val intent = withContext(Dispatchers.IO) {
                     exportUseCase.executeCreateShareIntent(bitmap)
                 }

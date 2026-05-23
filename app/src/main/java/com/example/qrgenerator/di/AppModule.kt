@@ -6,6 +6,8 @@ import com.example.qrgenerator.data.repository.QrHistoryRepository
 import com.example.qrgenerator.data.repository.SettingsRepository
 import com.example.qrgenerator.domain.ContentValidator
 import com.example.qrgenerator.domain.ExportUseCase
+import com.example.qrgenerator.domain.QrConfigHolder
+import com.example.qrgenerator.domain.QrConfigHolderImpl
 import com.example.qrgenerator.domain.QrGeneratorUseCase
 import com.example.qrgenerator.ui.screens.generate.GenerateViewModel
 import com.example.qrgenerator.ui.screens.history.HistoryViewModel
@@ -33,9 +35,12 @@ val appModule = module {
     single { ExportUseCase(androidContext()) }
     single { ContentValidator() }
 
+    // 共享状态
+    single<QrConfigHolder> { QrConfigHolderImpl() }
+
     // ViewModel
-    viewModel { GenerateViewModel(get(), get(), get()) }
-    viewModel { StyleViewModel() }
+    viewModel { GenerateViewModel(get(), get(), get(), get()) }
+    viewModel { StyleViewModel(get()) }
     viewModel { HistoryViewModel(get()) }
     viewModel { SettingsViewModel(get()) }
 }

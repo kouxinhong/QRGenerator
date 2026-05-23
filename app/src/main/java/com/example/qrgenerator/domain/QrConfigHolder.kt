@@ -1,27 +1,16 @@
 package com.example.qrgenerator.domain
 
 import com.example.qrgenerator.data.model.QrConfig
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 
-/**
- * QR 配置共享持有者
- * 用于在 GenerateViewModel 和 StyleViewModel 之间共享配置状态
- */
-object QrConfigHolder {
+/** QR 配置共享持有者接口 — 用于在 ViewModel 之间共享配置状态 */
+interface QrConfigHolder {
 
-    private val _config = MutableStateFlow(QrConfig())
-    val config: StateFlow<QrConfig> = _config.asStateFlow()
+    val config: StateFlow<QrConfig>
 
     /** 更新配置 */
-    fun executeUpdateConfig(transform: (QrConfig) -> QrConfig) {
-        _config.update(transform)
-    }
+    fun executeUpdateConfig(transform: (QrConfig) -> QrConfig)
 
     /** 设置完整配置 */
-    fun executeSetConfig(config: QrConfig) {
-        _config.value = config
-    }
+    fun executeSetConfig(config: QrConfig)
 }
