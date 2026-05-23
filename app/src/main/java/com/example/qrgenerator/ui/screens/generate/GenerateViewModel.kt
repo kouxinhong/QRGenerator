@@ -7,9 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.qrgenerator.data.model.QrConfig
 import com.example.qrgenerator.data.model.QrContentType
+import com.example.qrgenerator.domain.ContentValidator
 import com.example.qrgenerator.domain.ExportUseCase
 import com.example.qrgenerator.domain.QrConfigHolder
 import com.example.qrgenerator.domain.QrGeneratorUseCase
+import com.example.qrgenerator.domain.ValidationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -35,7 +37,8 @@ data class GenerateUiState(
 /** 生成页面 ViewModel */
 class GenerateViewModel(
     private val qrGeneratorUseCase: QrGeneratorUseCase,
-    private val exportUseCase: ExportUseCase
+    private val exportUseCase: ExportUseCase,
+    private val contentValidator: ContentValidator
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GenerateUiState())
@@ -60,12 +63,11 @@ class GenerateViewModel(
         QrConfigHolder.executeSetConfig(newConfig)
     }
 
-    /** 更新内容文本 */
+    /** 更新内容文本（防抖由 QrConfigHolder.collect 统一触发） */
     fun executeUpdateContent(content: String) {
         val newConfig = _uiState.value.config.copy(content = content)
         _uiState.update { it.copy(config = newConfig) }
         QrConfigHolder.executeSetConfig(newConfig)
-        executeDebounceGenerate()
     }
 
     /** 防抖生成（300ms 延迟） */
@@ -81,7 +83,12 @@ class GenerateViewModel(
     fun executeGenerate() {
         val config = _uiState.value.config
         if (config.content.isBlank()) {
-            _uiState.update { it.copy(qrDrawable = null, isGenerating = false) }
+            _uiState.update { it.copy(qrDrawable = null, isGenerating = false, errorMessage = null) }
+            return
+        }
+        val validation = contentValidator.validate(config.contentType, config.content)
+        if (validation is ValidationResult.Invalid) {
+            _uiState.update { it.copy(qrDrawable = null, isGenerating = false, errorMessage = validation.message) }
             return
         }
         _uiState.update { it.copy(isGenerating = true, errorMessage = null) }
