@@ -1,97 +1,44 @@
 package com.example.qrgenerator.ui.navigation
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.QrCode
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
-/** 底部导航项 */
-enum class BottomNavItem(
-    val route: String,
-    val label: String,
-    val icon: ImageVector
-) {
-    GENERATE("generate", "生成", Icons.Default.AutoAwesome),
-    STYLE("style", "样式", Icons.Default.Palette),
-    HISTORY("history", "历史", Icons.Default.History),
-    SETTINGS("settings", "设置", Icons.Default.Settings);
+enum class BottomNavItem(val route: String, val label: String, val icon: ImageVector) {
+    GENERATE("generate", "做二维码", Icons.Outlined.QrCode),
+    STYLE("style", "换样式", Icons.Outlined.Palette),
+    HISTORY("history", "已保存", Icons.Outlined.History),
+    SETTINGS("settings", "设置", Icons.Outlined.Settings)
 }
 
-/** 底部导航栏 */
 @Composable
-fun BottomNavBar(
-    currentRoute: String?,
-    onNavigate: (String) -> Unit
-) {
-    val primary = MaterialTheme.colorScheme.primary
-
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp
-    ) {
-        BottomNavItem.entries.forEach { item ->
-            val isSelected = currentRoute == item.route
-            val iconColor by animateColorAsState(
-                targetValue = if (isSelected) primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                label = "navIconColor"
-            )
-            val textColor by animateColorAsState(
-                targetValue = if (isSelected) primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                label = "navTextColor"
-            )
-
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = { onNavigate(item.route) },
-                icon = {
-                    Icon(
-                        item.icon,
-                        contentDescription = item.label,
-                        tint = iconColor,
-                        modifier = Modifier.drawBehind {
-                            if (isSelected) {
-                                drawRoundRect(
-                                    color = primary.copy(alpha = 0.12f),
-                                    topLeft = Offset(-4.dp.toPx(), -2.dp.toPx()),
-                                    size = Size(size.width + 8.dp.toPx(), size.height + 4.dp.toPx()),
-                                    cornerRadius = CornerRadius(8.dp.toPx())
-                                )
-                            }
-                        }
+fun BottomNavBar(currentRoute: String?, onNavigate: (String) -> Unit) {
+    Column {
+        Divider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+        NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+            BottomNavItem.entries.filter { it != BottomNavItem.STYLE }.forEach { item ->
+                NavigationBarItem(
+                    selected = currentRoute == item.route || (item == BottomNavItem.GENERATE && currentRoute == BottomNavItem.STYLE.route),
+                    onClick = { onNavigate(item.route) },
+                    icon = { Icon(item.icon, contentDescription = null) },
+                    label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.surface,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                },
-                label = {
-                    Text(
-                        text = item.label,
-                        color = textColor,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = MaterialTheme.colorScheme.surface
                 )
-            )
+            }
         }
     }
 }

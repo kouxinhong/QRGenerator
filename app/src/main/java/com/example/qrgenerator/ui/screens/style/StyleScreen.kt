@@ -1,204 +1,121 @@
 package com.example.qrgenerator.ui.screens.style
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.koin.androidx.compose.koinViewModel
 import com.example.qrgenerator.data.model.*
-import com.example.qrgenerator.ui.components.ColorGridPicker
-import com.example.qrgenerator.ui.components.ShapeChipGroup
+import kotlinx.coroutines.launch
+import org.koin.androidx.compose.koinViewModel
 
-/** 样式页面 */
+/** 先选成套样式，需要时再展开具体设置。 */
 @Composable
-fun StyleScreen(viewModel: StyleViewModel = koinViewModel()) {
+fun StyleScreen(viewModel: StyleViewModel = koinViewModel(), onDone: () -> Unit = {}) {
     val config by viewModel.config.collectAsStateWithLifecycle()
-
-    var isLoaded by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { isLoaded = true }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-    ) {
-        // 模块形状
-        AnimatedStyleCard(
-            title = "模块形状",
-            isVisible = isLoaded,
-            delayMillis = 0
-        ) {
-            ShapeChipGroup(
-                title = "暗色模块",
-                options = QrPixelShapeType.entries,
-                selected = config.darkPixelShape,
-                displayName = { it.displayName },
-                onSelected = { viewModel.executeUpdatePixelShape(it) }
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            ShapeChipGroup(
-                title = "亮色模块",
-                options = QrPixelShapeType.entries,
-                selected = config.lightPixelShape,
-                displayName = { it.displayName },
-                onSelected = { viewModel.executeUpdateLightPixelShape(it) }
-            )
+    val preview by viewModel.preview.collectAsStateWithLifecycle()
+    var expandedSection by rememberSaveable { mutableStateOf<String?>(null) }
+    var showReset by rememberSaveable { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val update: ((QrConfig) -> QrConfig) -> Unit = { viewModel.onEvent(StyleEvent.UpdateConfig(it)) }
+    val onError: (String) -> Unit = { scope.launch { snackbar.showSnackbar(it) } }
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = MaterialTheme.colorScheme.background) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("选样式", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                TextButton(onClick = onDone, modifier = Modifier.heightIn(min = 48.dp)) { Text("完成") }
+            }
+            Text("点一下就能换，下面还可以自己调整", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp))
+            StylePreview(preview, config)
+            PresetPicker(config, onSelected = { viewModel.onEvent(StyleEvent.ApplyPreset(it)) })
+            Spacer(Modifier.height(16.dp))
+            StyleSection("shape", "形状", config.darkPixelShape.displayName, Icons.Outlined.Category, expandedSection, { expandedSection = it }) {
+                ShapeOptions(config, update)
+            }
+            StyleSection("color", "颜色", config.darkColor.type.displayName, Icons.Outlined.Palette, expandedSection, { expandedSection = it }) {
+                ColorOptions(config, update)
+            }
+            StyleSection("logo", "中间小图", if (config.logo.imagePath != null || config.logo.builtinIconName != null) "已添加" else "添加头像或图标", Icons.Outlined.Image, expandedSection, { expandedSection = it }) {
+                LogoOptions(config, update, onError)
+            }
+            StyleSection("background", "背景", if (config.background.imagePath != null) "已添加图片" else "颜色和图片", Icons.Outlined.Wallpaper, expandedSection, { expandedSection = it }) {
+                BackgroundOptions(config, update, onError)
+            }
+            Spacer(Modifier.height(12.dp))
+            StyleSection("advanced", "更多设置", "大小、留白、识别保护", Icons.Outlined.Tune, expandedSection, { expandedSection = it }) {
+                AdvancedOptions(config, update)
+            }
+            TextButton(onClick = { showReset = true }, modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 12.dp).heightIn(min = 48.dp)) {
+                Text("恢复默认样式")
+            }
         }
+    }
+    if (showReset) AlertDialog(
+        onDismissRequest = { showReset = false },
+        title = { Text("恢复默认样式？") },
+        text = { Text("颜色、形状和图片会恢复默认，填写的内容会保留。") },
+        confirmButton = { TextButton(onClick = { viewModel.onEvent(StyleEvent.ResetStyle); showReset = false }) { Text("恢复默认") } },
+        dismissButton = { TextButton(onClick = { showReset = false }) { Text("取消") } }
+    )
+}
 
-        // 眼睛形状
-        AnimatedStyleCard(
-            title = "眼睛形状",
-            isVisible = isLoaded,
-            delayMillis = 80
-        ) {
-            ShapeChipGroup(
-                title = "外框",
-                options = QrFrameShapeType.entries,
-                selected = config.frameShape,
-                displayName = { it.displayName },
-                onSelected = { viewModel.executeUpdateFrameShape(it) }
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            ShapeChipGroup(
-                title = "内球",
-                options = QrBallShapeType.entries,
-                selected = config.ballShape,
-                displayName = { it.displayName },
-                onSelected = { viewModel.executeUpdateBallShape(it) }
-            )
+@Composable
+private fun StylePreview(preview: StylePreviewState, config: QrConfig) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.widthIn(max = 220.dp).fillMaxWidth().height(220.dp).background(Color.White, RoundedCornerShape(8.dp)).padding(8.dp), contentAlignment = Alignment.Center) {
+            when {
+                preview.isLoading -> CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
+                preview.bitmap != null -> Image(preview.bitmap.asImageBitmap(), "当前二维码样式预览", modifier = Modifier.fillMaxSize())
+                preview.error != null -> Text(preview.error, color = Color(0xFF666666), modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
+            }
         }
-
-        // 颜色
-        AnimatedStyleCard(
-            title = "颜色",
-            isVisible = isLoaded,
-            delayMillis = 160
-        ) {
-            ColorGridPicker(
-                title = "前景色",
-                selectedColor = config.darkColor.solidColor,
-                onColorSelected = {
-                    viewModel.executeUpdateDarkColor(QrColorConfig(solidColor = it))
-                }
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            ColorGridPicker(
-                title = "眼睛外框",
-                selectedColor = config.frameColor.solidColor,
-                onColorSelected = {
-                    viewModel.executeUpdateFrameColor(QrColorConfig(solidColor = it))
-                }
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            ColorGridPicker(
-                title = "眼睛内球",
-                selectedColor = config.ballColor.solidColor,
-                onColorSelected = {
-                    viewModel.executeUpdateBallColor(QrColorConfig(solidColor = it))
-                }
-            )
-        }
-
-        // 容错级别
-        AnimatedStyleCard(
-            title = "容错级别",
-            isVisible = isLoaded,
-            delayMillis = 240
-        ) {
-            ShapeChipGroup(
-                title = "",
-                options = QrErrorLevel.entries,
-                selected = config.errorCorrectionLevel,
-                displayName = { it.displayName },
-                onSelected = { viewModel.executeUpdateErrorLevel(it) }
-            )
-        }
-
-        // 整体外形
-        AnimatedStyleCard(
-            title = "整体外形",
-            isVisible = isLoaded,
-            delayMillis = 320
-        ) {
-            ShapeChipGroup(
-                title = "",
-                options = CodeShapeType.entries,
-                selected = config.codeShape,
-                displayName = { it.displayName },
-                onSelected = { viewModel.executeUpdateCodeShape(it) }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
+        Text(if (config.content.isBlank()) "示例预览，填好内容后即可保存" else "样式已应用到你的二维码", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
-/** 带入场动画的样式卡片 */
 @Composable
-private fun AnimatedStyleCard(
+private fun StyleSection(
+    key: String,
     title: String,
-    isVisible: Boolean,
-    delayMillis: Int,
-    content: @Composable () -> Unit
+    summary: String,
+    icon: ImageVector,
+    expandedSection: String?,
+    onExpand: (String?) -> Unit,
+    content: @Composable ColumnScope.() -> Unit
 ) {
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = fadeIn(tween(400, delayMillis = delayMillis)) + slideInVertically(
-            tween(400, delayMillis = delayMillis),
-            initialOffsetY = { it / 10 }
-        )
-    ) {
-        StyleCard(title = title, content = content)
-    }
-}
-
-/** 样式卡片容器 */
-@Composable
-private fun StyleCard(
-    title: String,
-    content: @Composable () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-            content()
+    val expanded = expandedSection == key
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Column {
+            TextButton(
+                onClick = { onExpand(if (expanded) null else key) },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                shape = RoundedCornerShape(0.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+            ) {
+                Icon(icon, null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.weight(1f))
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.widthIn(max = 136.dp))
+                Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ChevronRight, if (expanded) "收起$title" else "展开$title", modifier = Modifier.size(22.dp))
+            }
+            if (expanded) Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+            Divider(modifier = Modifier.padding(start = 54.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
         }
     }
 }

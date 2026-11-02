@@ -9,6 +9,8 @@ import com.example.qrgenerator.domain.ExportUseCase
 import com.example.qrgenerator.domain.QrConfigHolder
 import com.example.qrgenerator.domain.QrConfigHolderImpl
 import com.example.qrgenerator.domain.QrGeneratorUseCase
+import com.example.qrgenerator.domain.QrCardRenderer
+import com.example.qrgenerator.domain.QrReadabilityChecker
 import com.example.qrgenerator.ui.screens.generate.GenerateViewModel
 import com.example.qrgenerator.ui.screens.history.HistoryViewModel
 import com.example.qrgenerator.ui.screens.settings.SettingsViewModel
@@ -27,20 +29,22 @@ val appModule = module {
     single { SettingsDataStore(androidContext()) }
 
     // 仓库
-    single { QrHistoryRepository(get()) }
+    single { QrHistoryRepository(get(), java.io.File(androidContext().filesDir, "qr_history")) }
     single { SettingsRepository(get()) }
 
     // UseCase
-    single { QrGeneratorUseCase() }
+    single { QrGeneratorUseCase(androidContext()) }
     single { ExportUseCase(androidContext()) }
     single { ContentValidator() }
+    single { QrCardRenderer() }
+    single { QrReadabilityChecker() }
 
     // 共享状态
     single<QrConfigHolder> { QrConfigHolderImpl() }
 
     // ViewModel
-    viewModel { GenerateViewModel(get(), get(), get(), get()) }
-    viewModel { StyleViewModel(get()) }
-    viewModel { HistoryViewModel(get()) }
-    viewModel { SettingsViewModel(get()) }
+    viewModel { GenerateViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { StyleViewModel(get(), get()) }
+    viewModel { HistoryViewModel(get(), get()) }
+    viewModel { SettingsViewModel(get(), get()) }
 }

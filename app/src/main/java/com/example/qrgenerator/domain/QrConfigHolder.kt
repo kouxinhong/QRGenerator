@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 interface QrConfigHolder {
 
     val config: StateFlow<QrConfig>
+    /** 完整恢复的次数，用于区分新草稿与历史/系统恢复。 */
+    val replacementRevision: Long
 
     /** 更新配置 */
     fun executeUpdateConfig(transform: (QrConfig) -> QrConfig)

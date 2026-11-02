@@ -1,11 +1,16 @@
 package com.example.qrgenerator.domain
 
+import android.content.ClipData
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -13,50 +18,91 @@ import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import com.example.qrgenerator.data.model.ExportFormat
 import java.io.File
-import java.io.FileOutputStream
+import java.io.OutputStream
 
-/** 导出用例 — 支持 PNG/SVG/PDF 导出、保存到相册、系统分享 */
+/** 保存真实 PNG / PDF；文件保存使用系统选择器，无需存储权限。 */
 class ExportUseCase(private val context: Context) {
-
-    /** 将 Drawable 转换为 Bitmap */
     fun executeDrawableToBitmap(drawable: Drawable, width: Int = 1024, height: Int = 1024): Bitmap {
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
+        require(width in 256..4096 && height in 256..4096) { "图片尺寸应在 256 到 4096 之间" }
+        val bitmap: Bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         drawable.setBounds(0, 0, width, height)
-        drawable.draw(canvas)
+        drawable.draw(Canvas(bitmap))
         return bitmap
     }
 
-    /** 保存到相册 */
-    fun executeSaveToGallery(bitmap: Bitmap, filename: String): Uri? {
-        val contentValues = ContentValues().apply {
+    fun executeSaveToGallery(bitmap: Bitmap, filename: String): Uri {
+        val values: ContentValues = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, filename)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/QRGenerator")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }
-        val uri = context.contentResolver.insert(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            contentValues
-        ) ?: return null
-        context.contentResolver.openOutputStream(uri)?.use { stream ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        val uri: Uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: error("无法创建相册图片，请检查存储空间")
+        try {
+            context.contentResolver.openOutputStream(uri)?.use { writePng(bitmap, it) } ?: error("无法写入相册")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            return uri
+        } catch (exception: Exception) {
+            context.contentResolver.delete(uri, null, null)
+            throw exception
         }
-        return uri
     }
 
-    /** 生成分享 Intent */
+    fun executeSaveDocument(bitmap: Bitmap, uri: Uri, format: ExportFormat) {
+        context.contentResolver.openOutputStream(uri, "wt")?.use { stream ->
+            when (format) {
+                ExportFormat.PNG -> writePng(bitmap, stream)
+                ExportFormat.PDF -> writePdf(bitmap, stream)
+                ExportFormat.SVG -> error("请选择 PNG 图片或 PDF 文档")
+            }
+        } ?: error("无法打开这个文件，请重新选择保存位置")
+    }
+
     fun executeCreateShareIntent(bitmap: Bitmap): Intent {
-        val file = File(context.cacheDir, "qr_share.png")
-        FileOutputStream(file).use { stream ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-        }
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val directory: File = File(context.cacheDir, "shares").apply { mkdirs() }
+        directory.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 24 * 60 * 60 * 1000L }?.forEach { it.delete() }
+        val file: File = File(directory, "二维码_${System.currentTimeMillis()}.png")
+        file.outputStream().use { writePng(bitmap, it) }
+        val uri: Uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         return Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri("二维码", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
+    fun executeSaveThumbnail(bitmap: Bitmap): String {
+        val directory: File = File(context.filesDir, "qr_history").apply { mkdirs() }
+        val file: File = File(directory, "${System.currentTimeMillis()}.png")
+        val ratio: Float = 256f / maxOf(bitmap.width, bitmap.height)
+        val thumbnail: Bitmap = Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt().coerceAtLeast(1), (bitmap.height * ratio).toInt().coerceAtLeast(1), true)
+        try { file.outputStream().use { writePng(thumbnail, it) } } finally { if (thumbnail !== bitmap) thumbnail.recycle() }
+        return file.absolutePath
+    }
+
+    private fun writePng(bitmap: Bitmap, stream: OutputStream) {
+        check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) { "图片写入失败，请检查存储空间" }
+    }
+
+    private fun writePdf(bitmap: Bitmap, stream: OutputStream) {
+        val document: PdfDocument = PdfDocument()
+        try {
+            val page: PdfDocument.Page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
+            page.canvas.drawColor(Color.WHITE)
+            val scale: Float = minOf(499f / bitmap.width, 746f / bitmap.height)
+            val width: Float = bitmap.width * scale
+            val height: Float = bitmap.height * scale
+            val left: Float = (595 - width) / 2f
+            val top: Float = (842 - height) / 2f
+            page.canvas.drawBitmap(bitmap, null, RectF(left, top, left + width, top + height), Paint(Paint.FILTER_BITMAP_FLAG))
+            document.finishPage(page)
+            document.writeTo(stream)
+        } finally {
+            document.close()
         }
     }
 }

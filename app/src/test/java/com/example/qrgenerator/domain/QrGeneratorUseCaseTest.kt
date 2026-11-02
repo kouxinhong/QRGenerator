@@ -49,24 +49,24 @@ class QrGeneratorUseCaseTest {
     }
 
     @Test
-    fun `SMS 类型应映射为 QrData_SMS`() {
+    fun `SMS 类型应编码为短信接收人协议`() {
         val config = QrConfig(contentType = QrContentType.SMS, content = "13800138000")
         val data = useCase.mapQrData(config)
-        assertTrue(data is QrData.SMS)
+        assertEquals("SMSTO:13800138000:", data.encode())
     }
 
     @Test
     fun `YOUTUBE 类型应映射为 QrData_YouTube`() {
         val config = QrConfig(contentType = QrContentType.YOUTUBE, content = "dQw4w9WgXcQ")
         val data = useCase.mapQrData(config)
-        assertTrue(data is QrData.YouTube)
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", data.encode())
     }
 
     @Test
     fun `GOOGLE_PLAY 类型应映射为 QrData_GooglePlay`() {
         val config = QrConfig(contentType = QrContentType.GOOGLE_PLAY, content = "com.example.app")
         val data = useCase.mapQrData(config)
-        assertTrue(data is QrData.GooglePlay)
+        assertEquals("https://play.google.com/store/apps/details?id=com.example.app", data.encode())
     }
 
     @Test
@@ -137,13 +137,11 @@ class QrGeneratorUseCaseTest {
     fun `VCard 应正确解析所有字段`() {
         val config = QrConfig(contentType = QrContentType.VCARD, content = "张三/某公司/工程师/13800138000/test@example.com")
         val data = useCase.mapQrData(config)
-        assertTrue(data is QrData.VCard)
-        val vcard = data as QrData.VCard
-        assertEquals("张三", vcard.name)
-        assertEquals("某公司", vcard.company)
-        assertEquals("工程师", vcard.title)
-        assertEquals("13800138000", vcard.phoneNumber)
-        assertEquals("test@example.com", vcard.email)
+        assertTrue(data.encode().contains("FN:张三"))
+        assertTrue(data.encode().contains("ORG:某公司"))
+        assertTrue(data.encode().contains("TITLE:工程师"))
+        assertTrue(data.encode().contains("TEL:13800138000"))
+        assertTrue(data.encode().contains("EMAIL:test@example.com"))
     }
 
     // --- execute 集成测试 ---

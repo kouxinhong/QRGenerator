@@ -19,7 +19,11 @@ enum class QrPixelShapeType(val displayName: String) {
     ROUND_CORNERS_VERTICAL("纵向圆角"),
     ROUND_CORNERS_HORIZONTAL("横向圆角"),
     HONEYCOMB("蜂巢"),
-    CAT_PAW("猫爪");
+    CAT_PAW("猫爪"),
+    BAMBOO("竹节"),
+    KITE("纸鸢"),
+    PETAL("花窗"),
+    RIPPLE("涟漪");
 }
 
 /** 眼睛外框形状类型 */
@@ -44,7 +48,10 @@ enum class QrColorType(val displayName: String) {
     SOLID("纯色"),
     LINEAR_GRADIENT("线性渐变"),
     RADIAL_GRADIENT("径向渐变"),
-    SWEEP_GRADIENT("扫描渐变");
+    SWEEP_GRADIENT("环绕渐变"),
+    TRANSPARENT("透明"),
+    ERASER("镂空"),
+    FOLLOW_DARK("跟随主色");
 }
 
 /** 渐变方向 */
@@ -75,6 +82,12 @@ enum class LogoPaddingType(val displayName: String) {
     EMPTY("无边距"),
     ACCURATE("精确"),
     NATURAL("自然");
+}
+
+/** 图片铺放方式 */
+enum class ImageScaleType(val displayName: String) {
+    FIT_XY("铺满"),
+    CENTER_CROP("居中裁剪");
 }
 
 /** 整体外形 */

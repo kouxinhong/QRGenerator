@@ -12,6 +12,7 @@ android {
         applicationId = "com.example.qrgenerator"
         minSdk = 26
         targetSdk = 34
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "1.0.0"
 
@@ -43,6 +44,7 @@ dependencies {
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2023.10.01")
     implementation(composeBom)
+    androidTestImplementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -62,6 +64,7 @@ dependencies {
 
     // QR Code Generator
     implementation("com.github.alexzhirkevich:custom-qr-generator:1.6.2")
+    implementation("com.google.zxing:core:3.5.1")
 
     // Koin (依赖注入)
     implementation("io.insert-koin:koin-android:3.5.0")
@@ -90,9 +93,11 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("com.google.zxing:core:3.5.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("io.insert-koin:koin-test:3.5.0")
     testImplementation("io.mockk:mockk:1.13.8")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("com.google.zxing:core:3.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }

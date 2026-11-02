@@ -1,103 +1,30 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.example.qrgenerator.ui.components
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.qrgenerator.data.model.ExportFormat
 
-/** 导出选项弹窗 */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExportDialog(
-    onExport: (ExportFormat) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var selectedFormat by remember { mutableStateOf(ExportFormat.PNG) }
-
+fun ExportDialog(onExport: (ExportFormat) -> Unit, onDismiss: () -> Unit, initialFormat: ExportFormat = ExportFormat.PNG) {
+    var selectedFormat: ExportFormat by remember { mutableStateOf(if (initialFormat == ExportFormat.SVG) ExportFormat.PNG else initialFormat) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = {
-            Text(
-                text = "导出二维码",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        },
+        title = { Text("保存为文件") },
         text = {
             Column {
-                Text(
-                    text = "选择导出格式",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                ExportFormat.entries.forEach { format ->
-                    FilterChip(
-                        selected = selectedFormat == format,
-                        onClick = { selectedFormat = format },
-                        label = {
-                            Text(
-                                format.displayName,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
+                Text("接下来选择保存位置。")
+                Spacer(Modifier.height(12.dp))
+                listOf(ExportFormat.PNG to "PNG 图片 · 适合发送和使用", ExportFormat.PDF to "PDF 文档 · 适合打印").forEach { (format, title) ->
+                    FilterChip(selected = format == selectedFormat, onClick = { selectedFormat = format }, label = { Text(title) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp))
                 }
             }
         },
-        confirmButton = {
-            Button(
-                onClick = { onExport(selectedFormat) },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                Text(
-                    "导出",
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
-        },
-        dismissButton = {
-            Button(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) {
-                Text(
-                    "取消",
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
-        }
+        confirmButton = { TextButton(onClick = { onExport(selectedFormat) }) { Text("选择保存位置") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }
