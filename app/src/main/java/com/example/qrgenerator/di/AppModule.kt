@@ -11,6 +11,9 @@ import com.example.qrgenerator.domain.QrConfigHolderImpl
 import com.example.qrgenerator.domain.QrGeneratorUseCase
 import com.example.qrgenerator.domain.QrCardRenderer
 import com.example.qrgenerator.domain.QrReadabilityChecker
+import com.example.qrgenerator.domain.QrScanner
+import com.example.qrgenerator.data.scanner.WeChatQrScanner
+import com.example.qrgenerator.ui.scanner.ScanViewModel
 import com.example.qrgenerator.ui.screens.generate.GenerateViewModel
 import com.example.qrgenerator.ui.screens.history.HistoryViewModel
 import com.example.qrgenerator.ui.screens.settings.SettingsViewModel
@@ -38,13 +41,15 @@ val appModule = module {
     single { ContentValidator() }
     single { QrCardRenderer() }
     single { QrReadabilityChecker() }
+    single<QrScanner> { WeChatQrScanner(androidContext()) }
 
     // 共享状态
     single<QrConfigHolder> { QrConfigHolderImpl() }
 
     // ViewModel
-    viewModel { GenerateViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { GenerateViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { StyleViewModel(get(), get()) }
     viewModel { HistoryViewModel(get(), get()) }
     viewModel { SettingsViewModel(get(), get()) }
+    viewModel { ScanViewModel(get(), get()) }
 }

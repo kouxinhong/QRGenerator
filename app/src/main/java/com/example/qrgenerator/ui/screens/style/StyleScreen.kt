@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.qrgenerator.data.model.*
+import com.example.qrgenerator.domain.QrReadability
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -33,14 +34,19 @@ fun StyleScreen(viewModel: StyleViewModel = koinViewModel(), onDone: () -> Unit 
     val scope = rememberCoroutineScope()
     val update: ((QrConfig) -> QrConfig) -> Unit = { viewModel.onEvent(StyleEvent.UpdateConfig(it)) }
     val onError: (String) -> Unit = { scope.launch { snackbar.showSnackbar(it) } }
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = MaterialTheme.colorScheme.background) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("选样式", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
                 TextButton(onClick = onDone, modifier = Modifier.heightIn(min = 48.dp)) { Text("完成") }
             }
+        }
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             Text("点一下就能换，下面还可以自己调整", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp))
-            StylePreview(preview, config)
+            StylePreview(preview) { viewModel.onEvent(StyleEvent.ResetStyle) }
             PresetPicker(config, onSelected = { viewModel.onEvent(StyleEvent.ApplyPreset(it)) })
             Spacer(Modifier.height(16.dp))
             StyleSection("shape", "形状", config.darkPixelShape.displayName, Icons.Outlined.Category, expandedSection, { expandedSection = it }) {
@@ -74,7 +80,7 @@ fun StyleScreen(viewModel: StyleViewModel = koinViewModel(), onDone: () -> Unit 
 }
 
 @Composable
-private fun StylePreview(preview: StylePreviewState, config: QrConfig) {
+private fun StylePreview(preview: StylePreviewState, onRestoreStyle: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.widthIn(max = 220.dp).fillMaxWidth().height(220.dp).background(Color.White, RoundedCornerShape(8.dp)).padding(8.dp), contentAlignment = Alignment.Center) {
             when {
@@ -83,7 +89,27 @@ private fun StylePreview(preview: StylePreviewState, config: QrConfig) {
                 preview.error != null -> Text(preview.error, color = Color(0xFF666666), modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
             }
         }
-        Text(if (config.content.isBlank()) "示例预览，填好内容后即可保存" else "样式已应用到你的二维码", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+        Spacer(Modifier.height(8.dp))
+        when {
+            preview.isLoading -> Text("正在预览并检查…", style = MaterialTheme.typography.bodySmall)
+            preview.readability == QrReadability.VERIFIED -> {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Outlined.CheckCircle, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(if (preview.isExample) "示例样式预览已识别" else "样式预览已识别", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(if (preview.isExample) "填写内容后，制作页会检查最终成品。" else "仅检查此处预览，制作页会再次检查最终成品。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            preview.readability == QrReadability.UNREADABLE || preview.error != null -> {
+                Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(8.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(if (preview.error != null) "暂时无法检查样式预览" else "样式预览暂未识别", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text("可减少小图遮挡，使用深色码点和浅色背景，或恢复默认样式。", style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = onRestoreStyle) { Text("恢复清晰样式") }
+                    }
+                }
+            }
+            else -> Unit
+        }
     }
 }
 

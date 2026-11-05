@@ -6,17 +6,14 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
 import android.graphics.drawable.Drawable
-import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import com.example.qrgenerator.data.model.ExportFormat
+import com.example.qrgenerator.data.model.QrPrintLayout
 import java.io.File
 import java.io.OutputStream
 
@@ -51,11 +48,11 @@ class ExportUseCase(private val context: Context) {
         }
     }
 
-    fun executeSaveDocument(bitmap: Bitmap, uri: Uri, format: ExportFormat) {
+    fun executeSaveDocument(bitmap: Bitmap, uri: Uri, format: ExportFormat, printLayout: QrPrintLayout = QrPrintLayout.SINGLE_CARD) {
         context.contentResolver.openOutputStream(uri, "wt")?.use { stream ->
             when (format) {
                 ExportFormat.PNG -> writePng(bitmap, stream)
-                ExportFormat.PDF -> writePdf(bitmap, stream)
+                ExportFormat.PDF -> QrPrintRenderer().writePdf(bitmap, printLayout, stream)
                 ExportFormat.SVG -> error("请选择 PNG 图片或 PDF 文档")
             }
         } ?: error("无法打开这个文件，请重新选择保存位置")
@@ -88,21 +85,4 @@ class ExportUseCase(private val context: Context) {
         check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) { "图片写入失败，请检查存储空间" }
     }
 
-    private fun writePdf(bitmap: Bitmap, stream: OutputStream) {
-        val document: PdfDocument = PdfDocument()
-        try {
-            val page: PdfDocument.Page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
-            page.canvas.drawColor(Color.WHITE)
-            val scale: Float = minOf(499f / bitmap.width, 746f / bitmap.height)
-            val width: Float = bitmap.width * scale
-            val height: Float = bitmap.height * scale
-            val left: Float = (595 - width) / 2f
-            val top: Float = (842 - height) / 2f
-            page.canvas.drawBitmap(bitmap, null, RectF(left, top, left + width, top + height), Paint(Paint.FILTER_BITMAP_FLAG))
-            document.finishPage(page)
-            document.writeTo(stream)
-        } finally {
-            document.close()
-        }
-    }
 }

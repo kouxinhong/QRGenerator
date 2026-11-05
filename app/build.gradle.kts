@@ -17,6 +17,7 @@ android {
         versionName = "1.0.0"
 
         vectorDrawables { useSupportLibrary = true }
+        ndk { abiFilters += setOf("armeabi-v7a", "arm64-v8a") }
     }
 
     buildTypes {
@@ -37,7 +38,11 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.5" }
-    packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+    packaging {
+        resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+        // AGP 8.2 使用压缩 SO，避免 16 KB 设备直接映射未对齐的 APK 条目。
+        jniLibs { useLegacyPackaging = true }
+    }
 }
 
 dependencies {
@@ -65,6 +70,16 @@ dependencies {
     // QR Code Generator
     implementation("com.github.alexzhirkevich:custom-qr-generator:1.6.2")
     implementation("com.google.zxing:core:3.5.1")
+
+    // 微信二维码识别：2.4.0 支持 compileSdk 34，原生库仅打包 ARM。
+    val weChatQrCodeVersion = "2.4.0"
+    implementation("com.github.jenly1314.WeChatQRCode:opencv:$weChatQrCodeVersion")
+    implementation("com.github.jenly1314.WeChatQRCode:opencv-armv7a:$weChatQrCodeVersion")
+    implementation("com.github.jenly1314.WeChatQRCode:opencv-armv64:$weChatQrCodeVersion")
+    implementation("com.github.jenly1314.WeChatQRCode:wechat-qrcode:$weChatQrCodeVersion")
+    implementation("androidx.camera:camera-camera2:1.4.0")
+    implementation("androidx.camera:camera-lifecycle:1.4.0")
+    implementation("androidx.camera:camera-view:1.4.0")
 
     // Koin (依赖注入)
     implementation("io.insert-koin:koin-android:3.5.0")

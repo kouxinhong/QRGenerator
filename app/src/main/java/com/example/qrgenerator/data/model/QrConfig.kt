@@ -81,5 +81,13 @@ data class QrConfig(
     val logo: QrLogoConfig = QrLogoConfig(),
     val highlighting: QrHighlightingConfig = QrHighlightingConfig(),
     // 卡面文字独立于二维码内容，历史恢复时一并保留。
-    val card: QrCardConfig = QrCardConfig()
-)
+    val card: QrCardConfig = QrCardConfig(),
+    val sourcePayload: QrSourcePayload? = null
+) {
+    /** 来源只属于导入时的内容快照；编辑后移除，避免继续保存无关的密码等原始信息。 */
+    fun withoutStaleSourcePayload(): QrConfig {
+        val source: QrSourcePayload = sourcePayload ?: return this
+        return if (source.contentType == contentType && source.formContent == content) this
+        else copy(sourcePayload = null)
+    }
+}

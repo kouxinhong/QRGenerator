@@ -1,12 +1,17 @@
 package com.example.qrgenerator.ui.screens.generate
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import com.example.qrgenerator.data.model.*
 import com.example.qrgenerator.data.repository.QrHistoryRepository
 import com.example.qrgenerator.data.repository.SettingsRepository
 import com.example.qrgenerator.domain.*
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -24,6 +29,7 @@ import java.io.IOException
 class GenerateViewModelTest {
     private val dispatcher: TestDispatcher = StandardTestDispatcher()
     private val store: ViewModelStore = ViewModelStore()
+    private val viewModelJobs: MutableList<Job> = mutableListOf()
     private val holder: QrConfigHolderImpl = QrConfigHolderImpl()
     private val settings: MutableStateFlow<AppSettings> = MutableStateFlow(AppSettings())
     private val repository: SettingsRepository = mockk()
@@ -38,9 +44,14 @@ class GenerateViewModelTest {
     }
 
     @After
-    fun teardown() {
-        store.clear()
-        Dispatchers.resetMain()
+    fun teardown() = runTest(dispatcher) {
+        try {
+            store.clear()
+            // Default 上的渲染取消后仍需回到 Main 收尾，等待完成再重置测试调度器。
+            viewModelJobs.joinAll()
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 
     @Test
@@ -216,7 +227,253 @@ class GenerateViewModelTest {
         assertEquals("设置已恢复", viewModel.uiState.value.message)
     }
 
-    private fun createViewModel(): GenerateViewModel = GenerateViewModel(generator, exporter, ContentValidator(), holder, history, repository).also { store.put("generate", it) }
+    private fun createViewModel(savedState: SavedStateHandle = SavedStateHandle()): GenerateViewModel = GenerateViewModel(
+        generator, exporter, ContentValidator(), holder, history, repository, savedState = savedState
+    ).also {
+        store.put("generate", it)
+        viewModelJobs += it.viewModelScope.coroutineContext.job
+    }
+
+    @Test
+    fun `扫码填入保留WiFi场景原文样式并能撤销整个草稿`() {
+        val viewModel: GenerateViewModel = createViewModel()
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.WIFI))
+        viewModel.onEvent(GenerateEvent.UpdateContent(QrContentCodec.serialize(mapOf("ssid" to "原网络", "password" to "12345678"))))
+        holder.executeUpdateConfig { it.copy(imageWidth = 768, imageHeight = 768, padding = .2f) }
+        val previous: QrConfig = holder.config.value
+        val payload: String = "WIFI:T:WPA;S:店名\\;分店;P: abc\\:123 ;H:true;;"
+        viewModel.onEvent(GenerateEvent.ImportScannedContent(payload))
+        val actual: QrConfig = holder.config.value
+        assertEquals(QrScene.WIFI, actual.card.scene)
+        assertEquals(QrContentType.WIFI, actual.contentType)
+        assertEquals("店名;分店", QrContentCodec.fields(actual.contentType, actual.content)["ssid"])
+        assertEquals(payload, QrContentCodec.encode(actual).encode())
+        assertEquals(previous.padding, actual.padding)
+        assertEquals(previous.imageWidth, actual.imageWidth)
+        assertEquals(previous.card.enabled, actual.card.enabled)
+        assertTrue(viewModel.uiState.value.canUndoImport)
+        viewModel.onEvent(GenerateEvent.UndoImport)
+        assertEquals(previous, holder.config.value)
+        assertFalse(viewModel.uiState.value.canUndoImport)
+    }
+
+    @Test
+    fun `扫码填入自由制作保留卡片文字和首尾空白`() {
+        val viewModel: GenerateViewModel = createViewModel()
+        viewModel.onEvent(GenerateEvent.UpdateCardTitle("我的卡片"))
+        viewModel.onEvent(GenerateEvent.UpdateCardSubtitle("扫码了解详情"))
+        val card: QrCardConfig = holder.config.value.card
+        val payload: String = "  第一行\r\n第二行  "
+        viewModel.onEvent(GenerateEvent.ImportScannedContent(payload))
+        assertEquals(card, holder.config.value.card)
+        assertEquals(payload, QrContentCodec.encode(holder.config.value).encode())
+    }
+
+    @Test
+    fun `空扫码结果不覆盖当前草稿`() {
+        val viewModel: GenerateViewModel = createViewModel()
+        viewModel.onEvent(GenerateEvent.UpdateContent("保留的草稿"))
+        val previous: QrConfig = holder.config.value
+        viewModel.onEvent(GenerateEvent.ImportScannedContent(""))
+        assertEquals(previous, holder.config.value)
+    }
+
+    @Test
+    fun `菜单导入网址保持自定义标题而不变成自由制作`() {
+        val viewModel: GenerateViewModel = createViewModel()
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.MENU))
+        viewModel.onEvent(GenerateEvent.UpdateCardTitle("午间菜单"))
+        val previous: QrConfig = holder.config.value
+        val payload: String = "https://example.com/menu?x=1&y=2"
+        viewModel.onEvent(GenerateEvent.ImportScannedContent(payload))
+        assertEquals(previous.card, holder.config.value.card)
+        assertEquals(QrContentType.URL, holder.config.value.contentType)
+        assertEquals(payload, QrContentCodec.encode(holder.config.value).encode())
+    }
+
+    @Test
+    fun `自由文字替换可撤销且撤销后切换用途仍保留原草稿`() {
+        val viewModel: GenerateViewModel = createViewModel()
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.FREE))
+        viewModel.onEvent(GenerateEvent.UpdateContent("原草稿"))
+        val previous: QrConfig = holder.config.value
+        viewModel.onEvent(GenerateEvent.ImportScannedContent("替换后的内容"))
+        viewModel.onEvent(GenerateEvent.UndoImport)
+        assertEquals(previous, holder.config.value)
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.WIFI))
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.FREE))
+        assertEquals(previous, holder.config.value)
+    }
+
+    @Test
+    fun `导入后继续编辑会取消撤销避免覆盖新输入`() {
+        val viewModel: GenerateViewModel = createViewModel()
+        viewModel.onEvent(GenerateEvent.ImportScannedContent("扫码内容"))
+        viewModel.onEvent(GenerateEvent.UpdateContent("后来手动改的内容"))
+        viewModel.onEvent(GenerateEvent.UndoImport)
+        assertFalse(viewModel.uiState.value.canUndoImport)
+        assertEquals("后来手动改的内容", holder.config.value.content)
+    }
+
+    @Test
+    fun `从历史恢复内容后旧导入撤销不能覆盖恢复记录`() {
+        val viewModel: GenerateViewModel = createViewModel()
+        viewModel.onEvent(GenerateEvent.ImportScannedContent("扫码内容"))
+        val restored: QrConfig = QrConfig(content = "历史记录")
+        holder.executeSetConfig(restored)
+        viewModel.onEvent(GenerateEvent.UndoImport)
+        assertEquals(restored, holder.config.value)
+    }
+
+    @Test
+    fun `恢复相同内容的历史也立即隐藏旧导入撤销`() = runTest(dispatcher) {
+        val viewModel: GenerateViewModel = createViewModel()
+        runCurrent()
+        viewModel.onEvent(GenerateEvent.ImportScannedContent("扫码内容"))
+        runCurrent()
+        assertTrue(viewModel.uiState.value.canUndoImport)
+        val imported: QrConfig = holder.config.value
+        holder.executeSetConfig(imported)
+        runCurrent()
+        assertFalse(viewModel.uiState.value.canUndoImport)
+        viewModel.onEvent(GenerateEvent.UndoImport)
+        assertEquals(imported, holder.config.value)
+    }
+
+    @Test
+    fun `第一次进入先选用途而已有草稿直接编辑`() = runTest(dispatcher) {
+        val viewModel: GenerateViewModel = createViewModel()
+        assertTrue(viewModel.uiState.value.isChoosingTask)
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.FREE))
+        assertFalse(viewModel.uiState.value.isChoosingTask)
+        holder.executeSetConfig(QrConfig(content = "恢复的文字"))
+        runCurrent()
+        assertFalse(viewModel.uiState.value.isChoosingTask)
+    }
+
+    @Test
+    fun `返回用途选择保留非空草稿且设置更新和重新渲染不会打开编辑`() = runTest(dispatcher) {
+        val viewModel: GenerateViewModel = createViewModel()
+        runCurrent()
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.MENU))
+        viewModel.onEvent(GenerateEvent.UpdateContent("尚未填完的网址"))
+        viewModel.onEvent(GenerateEvent.UpdateCardTitle("午间菜单"))
+        holder.executeUpdateConfig { it.copy(darkPixelShape = QrPixelShapeType.BAMBOO, padding = .2f) }
+        val previous: QrConfig = holder.config.value
+        viewModel.onEvent(GenerateEvent.ReturnToTaskSelection)
+        viewModel.onEvent(GenerateEvent.Generate)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isChoosingTask)
+        assertEquals(previous, viewModel.uiState.value.config)
+        assertNotNull(viewModel.uiState.value.validationMessage)
+        settings.value = settings.value.copy(defaultImageSize = 2048)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isChoosingTask)
+        assertEquals(previous.copy(imageWidth = 2048, imageHeight = 2048), holder.config.value)
+        assertEquals(holder.config.value, viewModel.uiState.value.config)
+    }
+
+    @Test
+    fun `导入后返回用途选择保留原始扫码内容和完整草稿`() = runTest(dispatcher) {
+        val viewModel: GenerateViewModel = createViewModel()
+        runCurrent()
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.WIFI))
+        viewModel.onEvent(GenerateEvent.UpdateCardTitle("访客网络"))
+        holder.executeUpdateConfig { it.copy(imageWidth = 768, imageHeight = 768, padding = .2f) }
+        val payload: String = "WIFI:T:WPA;S:店名\\;分店;P: abc\\:123 ;H:true;;"
+        viewModel.onEvent(GenerateEvent.ImportScannedContent(payload))
+        val imported: QrConfig = holder.config.value
+        assertNotNull(imported.sourcePayload)
+        viewModel.onEvent(GenerateEvent.ReturnToTaskSelection)
+        viewModel.onEvent(GenerateEvent.Generate)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isChoosingTask)
+        assertTrue(viewModel.uiState.value.canUndoImport)
+        assertEquals(imported, holder.config.value)
+        assertEquals(imported, viewModel.uiState.value.config)
+        assertEquals(payload, QrContentCodec.encode(holder.config.value).encode())
+    }
+
+    @Test
+    fun `从用途选择恢复相同历史会打开编辑且之后仍能返回`() = runTest(dispatcher) {
+        val viewModel: GenerateViewModel = createViewModel()
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.MENU))
+        viewModel.onEvent(GenerateEvent.UpdateContent("尚未填完的网址"))
+        advanceUntilIdle()
+        val restored: QrConfig = holder.config.value
+        viewModel.onEvent(GenerateEvent.ReturnToTaskSelection)
+        assertTrue(viewModel.uiState.value.isChoosingTask)
+        holder.executeSetConfig(restored)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isChoosingTask)
+        assertEquals(restored, viewModel.uiState.value.config)
+        viewModel.onEvent(GenerateEvent.ReturnToTaskSelection)
+        viewModel.onEvent(GenerateEvent.Generate)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isChoosingTask)
+        assertEquals(restored, holder.config.value)
+    }
+
+    @Test
+    fun `重建ViewModel恢复用途选择时不会因非空草稿跳回编辑`() = runTest(dispatcher) {
+        val savedState: SavedStateHandle = SavedStateHandle()
+        val viewModel: GenerateViewModel = createViewModel(savedState)
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.MENU))
+        viewModel.onEvent(GenerateEvent.UpdateContent("尚未填完的网址"))
+        viewModel.onEvent(GenerateEvent.UpdateCardTitle("稍后继续填写"))
+        advanceUntilIdle()
+        viewModel.onEvent(GenerateEvent.ReturnToTaskSelection)
+        val previous: QrConfig = holder.config.value
+        // 模拟旧页面真正销毁；仅覆盖同名实例不会清理旧 ViewModel 的协程资源。
+        store.clear()
+        viewModel.viewModelScope.coroutineContext.job.join()
+        val recreated: GenerateViewModel = createViewModel(savedState)
+        advanceUntilIdle()
+        assertTrue(recreated.uiState.value.isChoosingTask)
+        assertEquals(previous, recreated.uiState.value.config)
+        recreated.onEvent(GenerateEvent.SelectScene(QrScene.MENU))
+        assertFalse(recreated.uiState.value.isChoosingTask)
+        assertEquals(previous, holder.config.value)
+    }
+
+    @Test
+    fun `返回后重新选择同一用途或其他用途不会丢失各自草稿`() = runTest(dispatcher) {
+        val viewModel: GenerateViewModel = createViewModel()
+        runCurrent()
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.WIFI))
+        viewModel.onEvent(GenerateEvent.UpdateContent(QrContentCodec.serialize(mapOf("ssid" to "访客网络", "password" to "secret"))))
+        viewModel.onEvent(GenerateEvent.UpdateCardTitle("欢迎来小店"))
+        holder.executeUpdateConfig { it.copy(darkPixelShape = QrPixelShapeType.BAMBOO) }
+        val wifiDraft: QrConfig = holder.config.value
+        viewModel.onEvent(GenerateEvent.ReturnToTaskSelection)
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.WIFI))
+        assertFalse(viewModel.uiState.value.isChoosingTask)
+        assertEquals(wifiDraft, holder.config.value)
+        viewModel.onEvent(GenerateEvent.ReturnToTaskSelection)
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.MENU))
+        viewModel.onEvent(GenerateEvent.UpdateContent("尚未填完的网址"))
+        viewModel.onEvent(GenerateEvent.UpdateCardTitle("今日菜单"))
+        val menuDraft: QrConfig = holder.config.value
+        viewModel.onEvent(GenerateEvent.ReturnToTaskSelection)
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.WIFI))
+        assertEquals(wifiDraft, holder.config.value)
+        viewModel.onEvent(GenerateEvent.ReturnToTaskSelection)
+        viewModel.onEvent(GenerateEvent.SelectScene(QrScene.MENU))
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isChoosingTask)
+        assertEquals(menuDraft, viewModel.uiState.value.config)
+    }
+
+    @Test
+    fun `复杂联系人保留原码且恢复样式不丢未知字段`() {
+        val viewModel: GenerateViewModel = createViewModel()
+        val raw: String = "BEGIN:VCARD\nVERSION:3.0\nFN:小王\nTEL:13800138000\nTEL:13900139000\nX-CUSTOM:保留我\nEND:VCARD"
+        viewModel.onEvent(GenerateEvent.ImportScannedContent(raw))
+        assertEquals(QrScene.CONTACT, holder.config.value.card.scene)
+        assertEquals(QrContentType.TEXT, holder.config.value.contentType)
+        viewModel.onEvent(GenerateEvent.RestoreReadableStyle)
+        assertEquals(raw, QrContentCodec.encode(holder.config.value).encode())
+    }
 
     @Test
     fun `切换用途保留每张卡片的内容标题和样式`() = runTest(dispatcher) {

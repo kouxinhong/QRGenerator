@@ -11,15 +11,17 @@ class QrConfigHolderImpl : QrConfigHolder {
 
     private val _config = MutableStateFlow(QrConfig())
     override val config: StateFlow<QrConfig> = _config.asStateFlow()
-    override var replacementRevision: Long = 0L
-        private set
+    private val _replacementChanges: MutableStateFlow<Long> = MutableStateFlow(0L)
+    override val replacementChanges: StateFlow<Long> = _replacementChanges.asStateFlow()
+    override val replacementRevision: Long
+        get() = _replacementChanges.value
 
     override fun executeUpdateConfig(transform: (QrConfig) -> QrConfig) {
-        _config.update(transform)
+        _config.update { transform(it).withoutStaleSourcePayload() }
     }
 
     override fun executeSetConfig(config: QrConfig) {
-        replacementRevision += 1L
-        _config.value = config
+        _config.value = config.withoutStaleSourcePayload()
+        _replacementChanges.update { it + 1L }
     }
 }

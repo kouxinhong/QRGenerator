@@ -4,10 +4,13 @@ import com.example.qrgenerator.data.local.QrHistoryDao
 import com.example.qrgenerator.data.local.QrHistoryEntity
 import com.example.qrgenerator.data.model.QrConfig
 import com.example.qrgenerator.domain.QrContentCodec
+import com.example.qrgenerator.domain.QrPayloadKind
+import com.example.qrgenerator.domain.QrPayloadParser
 import com.example.qrgenerator.util.QrConfigSerializer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -15,9 +18,11 @@ class QrHistoryRepository(
     private val dao: QrHistoryDao,
     private val historyDirectory: File? = null
 ) {
-    fun executeGetAll(): Flow<List<QrHistoryEntity>> = dao.getAllHistory()
-    fun executeGetByType(type: String): Flow<List<QrHistoryEntity>> = dao.getHistoryByType(type)
-    fun executeSearch(query: String): Flow<List<QrHistoryEntity>> = dao.searchHistory(query)
+    fun executeGetAll(): Flow<List<QrHistoryEntity>> = dao.getAllHistory().map { records -> records.map(::sanitizePreview) }
+    fun executeGetByType(type: String): Flow<List<QrHistoryEntity>> = executeGetAll().map { records -> records.filter { it.contentType == type } }
+    fun executeSearch(query: String): Flow<List<QrHistoryEntity>> = executeGetAll().map { records ->
+        records.filter { it.contentPreview.contains(query.trim(), ignoreCase = true) }
+    }
 
     suspend fun executeSave(config: QrConfig, thumbnailPath: String): Long {
         val entity = QrHistoryEntity(
@@ -51,6 +56,20 @@ class QrHistoryRepository(
         if (!config.card.enabled) return content
         val title: String = config.card.title.ifBlank { config.card.scene.defaultTitle }.replace('\n', ' ').take(24)
         return listOf(title, content).filter { it.isNotBlank() }.joinToString(" · ")
+    }
+
+    /** 旧版已存的文字型 Wi-Fi 码也重新生成摘要；搜索仅使用清理后的可见内容。 */
+    private fun sanitizePreview(record: QrHistoryEntity): QrHistoryEntity {
+        val safePreview: String? = runCatching {
+            val config: QrConfig = QrConfigSerializer.deserialize(record.configJson)
+            if (config.contentType.name in setOf("WIFI", "ENTERPRISE_WIFI") ||
+                QrPayloadParser.parse(config.content).kind == QrPayloadKind.WIFI) buildPreview(config) else null
+        }.getOrNull()
+        if (safePreview != null) return record.copy(contentPreview = safePreview)
+        if (Regex("WIFI\\s*:", RegexOption.IGNORE_CASE).containsMatchIn(record.contentPreview)) {
+            return record.copy(contentPreview = "Wi-Fi 二维码")
+        }
+        return record
     }
 
     /** 记录已删除后，缩略图清理失败不应把删除结果误报成失败。 */

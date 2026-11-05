@@ -7,6 +7,7 @@ import android.graphics.drawable.Drawable
 import android.content.res.Resources
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.qrgenerator.data.model.*
 import com.example.qrgenerator.data.repository.QrHistoryRepository
@@ -22,16 +23,19 @@ import java.io.IOException
 
 sealed interface GenerateEvent {
     data class SelectScene(val scene: QrScene) : GenerateEvent
+    data object ReturnToTaskSelection : GenerateEvent
     data class UpdateCardTitle(val title: String) : GenerateEvent
     data class UpdateCardSubtitle(val subtitle: String) : GenerateEvent
     data class SetCardEnabled(val enabled: Boolean) : GenerateEvent
     data object RestoreReadableStyle : GenerateEvent
     data class UpdateContentType(val type: QrContentType) : GenerateEvent
     data class UpdateContent(val content: String) : GenerateEvent
+    data class ImportScannedContent(val content: String) : GenerateEvent
+    data object UndoImport : GenerateEvent
     data object Generate : GenerateEvent
     data object SaveToGallery : GenerateEvent
     data object Share : GenerateEvent
-    data class ExportFile(val format: ExportFormat) : GenerateEvent
+    data class ExportFile(val format: ExportFormat, val printLayout: QrPrintLayout = QrPrintLayout.SINGLE_CARD) : GenerateEvent
     data class SaveDocument(val uri: Uri?) : GenerateEvent
     data object ClearDocumentRequest : GenerateEvent
     data object ClearShareIntent : GenerateEvent
@@ -51,11 +55,18 @@ data class GenerateUiState(
     val shareIntent: Intent? = null,
     val documentRequest: DocumentRequest? = null,
     val readability: QrReadability? = null,
-    val defaultExportFormat: ExportFormat = ExportFormat.PNG
+    val defaultExportFormat: ExportFormat = ExportFormat.PNG,
+    val isChoosingTask: Boolean = false,
+    val canUndoImport: Boolean = false,
+    val importRevision: Long = 0
 )
 
 private data class RenderedQr(val config: QrConfig, val bitmap: Bitmap)
 private data class CheckedArtwork(val bitmap: Bitmap, val readability: QrReadability)
+private data class ImportUndo(
+    val previous: QrConfig, val imported: QrConfig, val revision: Long,
+    val drafts: Map<QrContentType, String>, val scenes: Map<QrScene, QrConfig>, val wasChoosingTask: Boolean
+)
 
 class GenerateViewModel(
     private val qrGeneratorUseCase: QrGeneratorUseCase,
@@ -65,7 +76,8 @@ class GenerateViewModel(
     private val historyRepository: QrHistoryRepository,
     private val settingsRepository: SettingsRepository,
     private val cardRenderer: QrCardRenderer = QrCardRenderer(),
-    private val readabilityChecker: QrReadabilityChecker = QrReadabilityChecker()
+    private val readabilityChecker: QrReadabilityChecker = QrReadabilityChecker(),
+    private val savedState: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
     private val mutableState: MutableStateFlow<GenerateUiState> = MutableStateFlow(GenerateUiState())
     val uiState: StateFlow<GenerateUiState> = mutableState.asStateFlow()
@@ -73,17 +85,24 @@ class GenerateViewModel(
     private var renderedQr: RenderedQr? = null
     private var documentQr: RenderedQr? = null
     private var documentFormat: ExportFormat = ExportFormat.PNG
+    private var documentPrintLayout: QrPrintLayout = QrPrintLayout.SINGLE_CARD
+    private var importUndo: ImportUndo? = null
     private val drafts: MutableMap<QrContentType, String> = mutableMapOf()
     private val sceneDrafts: MutableMap<QrScene, QrConfig> = mutableMapOf()
     private val initialConfig: QrConfig = qrConfigHolder.config.value
     private val initialReplacementRevision: Long = qrConfigHolder.replacementRevision
+    private var observedReplacementRevision: Long = initialReplacementRevision
     private var previousSettings: AppSettings? = null
     private var hasSettingsReadFailure: Boolean = false
 
     init {
+        mutableState.update { it.copy(config = initialConfig) }
+        setChoosingTask(savedState.get<Boolean>("choosing_creation_task") ?: (initialReplacementRevision == 0L &&
+            initialConfig.content.isBlank() && initialConfig.card.scene == QrScene.FREE && !initialConfig.card.enabled))
         observeSettings()
         viewModelScope.launch {
-            combine(qrConfigHolder.config, renderRevision) { config, _ -> config }.collectLatest { config -> render(config) }
+            combine(qrConfigHolder.config, renderRevision, qrConfigHolder.replacementChanges) { config, _, _ -> config }
+                .collectLatest { config -> render(config) }
         }
     }
 
@@ -139,16 +158,19 @@ class GenerateViewModel(
     fun onEvent(event: GenerateEvent) {
         when (event) {
             is GenerateEvent.SelectScene -> selectScene(event.scene)
+            GenerateEvent.ReturnToTaskSelection -> setChoosingTask(true)
             is GenerateEvent.UpdateCardTitle -> updateConfig { it.copy(card = it.card.copy(title = event.title.take(24))) }
             is GenerateEvent.UpdateCardSubtitle -> updateConfig { it.copy(card = it.card.copy(subtitle = event.subtitle.take(48))) }
             is GenerateEvent.SetCardEnabled -> updateConfig { it.copy(card = it.card.copy(enabled = event.enabled)) }
             GenerateEvent.RestoreReadableStyle -> restoreReadableStyle()
             is GenerateEvent.UpdateContent -> updateConfig { it.copy(content = event.content) }
+            is GenerateEvent.ImportScannedContent -> importScannedContent(event.content)
+            GenerateEvent.UndoImport -> undoImport()
             is GenerateEvent.UpdateContentType -> changeType(event.type)
             GenerateEvent.Generate -> renderRevision.update { it + 1 }
             GenerateEvent.SaveToGallery -> saveToGallery()
             GenerateEvent.Share -> share()
-            is GenerateEvent.ExportFile -> requestDocument(event.format)
+            is GenerateEvent.ExportFile -> requestDocument(event.format, event.printLayout)
             is GenerateEvent.SaveDocument -> saveDocument(event.uri)
             GenerateEvent.ClearDocumentRequest -> mutableState.update { it.copy(documentRequest = null) }
             GenerateEvent.ClearShareIntent -> mutableState.update { it.copy(shareIntent = null) }
@@ -158,14 +180,58 @@ class GenerateViewModel(
     }
 
     private fun changeType(type: QrContentType) {
+        setChoosingTask(false)
         if (type == qrConfigHolder.config.value.contentType) return
         val current: QrConfig = qrConfigHolder.config.value
         drafts[current.contentType] = current.content
         updateConfig { it.copy(contentType = type, content = drafts[type].orEmpty(), card = it.card.copy(scene = QrScene.FREE)) }
     }
 
+    /** 快照包含草稿缓存；撤销后再切用途也不会把被替换的草稿弄丢。 */
+    private fun importScannedContent(content: String): Unit {
+        if (content.isEmpty()) return
+        val current: QrConfig = qrConfigHolder.config.value
+        val next: QrConfig = QrImportPolicy.createConfig(current, QrPayloadParser.parse(content))
+        val snapshot: ImportUndo = ImportUndo(current, next, qrConfigHolder.replacementRevision,
+            drafts.toMap(), sceneDrafts.toMap(), mutableState.value.isChoosingTask)
+        sceneDrafts[current.card.scene] = current
+        drafts[current.contentType] = current.content
+        updateConfig { next }
+        importUndo = snapshot
+        setChoosingTask(false)
+        mutableState.update { it.copy(canUndoImport = true, importRevision = it.importRevision + 1) }
+    }
+
+    private fun undoImport(): Unit {
+        val snapshot: ImportUndo = importUndo ?: return
+        if (snapshot.imported != qrConfigHolder.config.value || snapshot.revision != qrConfigHolder.replacementRevision) {
+            clearImportUndo()
+            return
+        }
+        updateConfig { snapshot.previous }
+        drafts.clear()
+        drafts.putAll(snapshot.drafts)
+        sceneDrafts.clear()
+        sceneDrafts.putAll(snapshot.scenes)
+        clearImportUndo()
+        setChoosingTask(snapshot.wasChoosingTask)
+        mutableState.update { it.copy(message = "已恢复导入前的内容", importRevision = it.importRevision + 1) }
+    }
+
+    private fun clearImportUndo(): Unit {
+        importUndo = null
+        mutableState.update { it.copy(canUndoImport = false) }
+    }
+
+    private fun setChoosingTask(isChoosing: Boolean): Unit {
+        savedState["choosing_creation_task"] = isChoosing
+        mutableState.update { it.copy(isChoosingTask = isChoosing) }
+    }
+
     /** 用途之间保留完整草稿，切回时不丢失标题和手工样式。 */
     private fun selectScene(scene: QrScene) {
+        clearImportUndo()
+        setChoosingTask(false)
         val current: QrConfig = qrConfigHolder.config.value
         if (current.card.scene == scene) return
         sceneDrafts[current.card.scene] = current
@@ -183,21 +249,28 @@ class GenerateViewModel(
             QrConfig(
                 contentType = current.contentType, content = current.content,
                 imageWidth = current.imageWidth, imageHeight = current.imageHeight,
-                errorCorrectionLevel = QrErrorLevel.HIGH, card = current.card
+                errorCorrectionLevel = QrErrorLevel.HIGH, card = current.card, sourcePayload = current.sourcePayload
             )
         }
     }
 
     private fun updateConfig(transform: (QrConfig) -> QrConfig) {
         val current: QrConfig = qrConfigHolder.config.value
-        val updated: QrConfig = transform(current)
+        val updated: QrConfig = transform(current).withoutStaleSourcePayload()
         if (updated == current) return
+        clearImportUndo()
         renderedQr = null
         mutableState.update { it.copy(config = updated, qrDrawable = null, validationMessage = null, readability = null) }
         qrConfigHolder.executeUpdateConfig { updated }
     }
 
     private suspend fun render(config: QrConfig) {
+        importUndo?.let { if (it.imported != config || it.revision != qrConfigHolder.replacementRevision) clearImportUndo() }
+        // 只在新恢复历史时打开编辑页，重新渲染已有草稿不能打断用户返回用途选择。
+        if (qrConfigHolder.replacementRevision != observedReplacementRevision) {
+            observedReplacementRevision = qrConfigHolder.replacementRevision
+            setChoosingTask(false)
+        }
         renderedQr = null
         mutableState.update { it.copy(config = config, qrDrawable = null, isGenerating = false, validationMessage = null, readability = null) }
         if (config.content.isBlank()) return
@@ -237,10 +310,11 @@ class GenerateViewModel(
         null
     }
 
-    private fun requestDocument(format: ExportFormat) {
+    private fun requestDocument(format: ExportFormat, printLayout: QrPrintLayout) {
         if (mutableState.value.isSaving) return
         documentQr = currentQr() ?: return
         documentFormat = if (format == ExportFormat.SVG) ExportFormat.PNG else format
+        documentPrintLayout = printLayout
         mutableState.update { it.copy(documentRequest = DocumentRequest(documentFormat, "二维码_${System.currentTimeMillis()}.${documentFormat.extension}")) }
     }
 
@@ -248,8 +322,10 @@ class GenerateViewModel(
         val qr: RenderedQr = documentQr ?: return
         documentQr = null
         if (uri == null) return
+        val format: ExportFormat = documentFormat
+        val printLayout: QrPrintLayout = documentPrintLayout
         performExport(qr) {
-            exportUseCase.executeSaveDocument(it.bitmap, uri, documentFormat)
+            exportUseCase.executeSaveDocument(it.bitmap, uri, format, printLayout)
             "文件已保存"
         }
     }

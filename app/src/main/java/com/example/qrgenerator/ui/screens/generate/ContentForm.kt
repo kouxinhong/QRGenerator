@@ -35,7 +35,7 @@ private data class ContentField(
 )
 
 @Composable
-fun ContentForm(type: QrContentType, content: String, onContentChange: (String) -> Unit) {
+fun ContentForm(type: QrContentType, content: String, passwordVisibilityKey: Any? = null, onContentChange: (String) -> Unit) {
     val values: Map<String, String> = QrContentCodec.fields(type, content)
     var showExtra: Boolean by rememberSaveable(type) { mutableStateOf(false) }
     val fields: List<ContentField> = contentFields(type)
@@ -46,7 +46,7 @@ fun ContentForm(type: QrContentType, content: String, onContentChange: (String) 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         fields.filter { !it.isExtra || showExtra }.forEach { field ->
             if (!(type == QrContentType.WIFI && field.key == "password" && values["auth"] == "OPEN")) {
-                ContentInput(field, values[field.key].orEmpty()) { update(field.key, it) }
+                ContentInput(field, values[field.key].orEmpty(), passwordVisibilityKey) { update(field.key, it) }
             }
         }
         if (type == QrContentType.WIFI) {
@@ -83,9 +83,10 @@ private fun ChoiceInput(label: String, choices: List<Pair<String, String>>, valu
 }
 
 @Composable
-private fun ContentInput(field: ContentField, value: String, onChange: (String) -> Unit) {
+private fun ContentInput(field: ContentField, value: String, passwordVisibilityKey: Any?, onChange: (String) -> Unit) {
     val context = LocalContext.current
-    var isPasswordVisible: Boolean by rememberSaveable(field.key) { mutableStateOf(false) }
+    // 导入、撤销及 Activity 重建均重新遮挡；输入过程中仍允许用户保持明文查看。
+    var isPasswordVisible: Boolean by remember(field.key, passwordVisibilityKey) { mutableStateOf(false) }
     val isPassword: Boolean = field.key == "password"
     val pickDate: () -> Unit = {
         val now: LocalDateTime = runCatching { LocalDateTime.parse(value, QrContentCodec.dateFormat) }.getOrElse { LocalDateTime.now() }

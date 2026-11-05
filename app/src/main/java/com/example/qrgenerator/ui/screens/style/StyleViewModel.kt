@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.qrgenerator.data.model.*
 import com.example.qrgenerator.domain.QrConfigHolder
 import com.example.qrgenerator.domain.QrGeneratorUseCase
+import com.example.qrgenerator.domain.QrContentCodec
+import com.example.qrgenerator.domain.QrReadability
+import com.example.qrgenerator.domain.QrReadabilityChecker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -40,12 +43,15 @@ sealed interface StyleEvent {
 data class StylePreviewState(
     val bitmap: Bitmap? = null,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val readability: QrReadability? = null,
+    val isExample: Boolean = false
 )
 
 class StyleViewModel(
     private val qrConfigHolder: QrConfigHolder,
-    private val qrGeneratorUseCase: QrGeneratorUseCase
+    private val qrGeneratorUseCase: QrGeneratorUseCase,
+    private val readabilityChecker: QrReadabilityChecker = QrReadabilityChecker()
 ) : ViewModel() {
     val config: StateFlow<QrConfig> = qrConfigHolder.config
     private val mutablePreview: MutableStateFlow<StylePreviewState> = MutableStateFlow(StylePreviewState())
@@ -78,31 +84,43 @@ class StyleViewModel(
             is StyleEvent.UpdateLogo -> update { it.copy(logo = event.logo) }
             is StyleEvent.UpdateConfig -> update(event.transform)
             is StyleEvent.ApplyPreset -> update { event.preset.applyTo(it) }
-            StyleEvent.ResetStyle -> update { QrConfig(contentType = it.contentType, content = it.content, imageWidth = it.imageWidth, imageHeight = it.imageHeight, card = it.card) }
+            StyleEvent.ResetStyle -> update { QrConfig(contentType = it.contentType, content = it.content, imageWidth = it.imageWidth, imageHeight = it.imageHeight, card = it.card, sourcePayload = it.sourcePayload) }
         }
     }
 
     private suspend fun renderPreview(current: QrConfig) {
+        var bitmap: Bitmap? = null
+        var isPublished: Boolean = false
         try {
-            val bitmap: Bitmap = withContext(Dispatchers.Default) {
-                val previewConfig = if (current.content.isBlank()) current.copy(contentType = QrContentType.TEXT, content = "你好，二维码！") else current
+            val result: StylePreviewState = withContext(Dispatchers.Default) {
+                val isExample: Boolean = current.content.isBlank()
+                val previewConfig: QrConfig = if (isExample) current.copy(contentType = QrContentType.TEXT, content = "你好，二维码！", sourcePayload = null) else current
                 val drawable = qrGeneratorUseCase.execute(previewConfig)
-                val previewWidth = 480
-                val previewHeight = (previewWidth * current.imageHeight.toFloat() / current.imageWidth).toInt().coerceIn(240, 960)
-                Bitmap.createBitmap(previewWidth, previewHeight, Bitmap.Config.ARGB_8888).also {
-                    drawable.setBounds(0, 0, previewWidth, previewHeight)
-                    drawable.draw(Canvas(it))
-                }
+                val previewWidth: Int = 480
+                val previewHeight: Int = (previewWidth * current.imageHeight.toFloat() / current.imageWidth.coerceAtLeast(1)).toInt().coerceIn(240, 960)
+                val image: Bitmap = Bitmap.createBitmap(previewWidth, previewHeight, Bitmap.Config.ARGB_8888)
+                bitmap = image
+                drawable.setBounds(0, 0, previewWidth, previewHeight)
+                drawable.draw(Canvas(image))
+                StylePreviewState(bitmap = image, readability = readabilityChecker.execute(image, QrContentCodec.encode(previewConfig).encode()), isExample = isExample)
             }
-            mutablePreview.value = StylePreviewState(bitmap = bitmap)
+            if (config.value != current) return
+            mutablePreview.value = result
+            isPublished = true
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            mutablePreview.value = StylePreviewState(error = "暂时无法预览，请检查填写的内容或换一种样式")
+            if (config.value == current) mutablePreview.value = StylePreviewState(error = "暂时无法预览，请检查填写的内容或换一种样式")
+        } finally {
+            if (!isPublished) bitmap?.recycle()
         }
     }
 
     private fun update(transform: (QrConfig) -> QrConfig) {
-        qrConfigHolder.executeUpdateConfig(transform)
+        qrConfigHolder.executeUpdateConfig { current ->
+            val updated: QrConfig = transform(current)
+            if (updated != current) mutablePreview.value = StylePreviewState(isLoading = true)
+            updated
+        }
     }
 }

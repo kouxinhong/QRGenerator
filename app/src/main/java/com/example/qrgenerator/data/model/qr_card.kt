@@ -9,7 +9,7 @@ enum class QrScene(
 ) {
     FREE("自由制作", QrContentType.TEXT, "扫码看看", "用手机相机扫一扫"),
     WIFI("连 Wi-Fi", QrContentType.WIFI, "欢迎连接 Wi-Fi", "扫一扫，加入无线网络"),
-    MENU("看菜单", QrContentType.URL, "扫码看菜单", "扫一扫，查看菜单"),
+    MENU("分享页面", QrContentType.URL, "扫码查看详情", "扫一扫，打开页面"),
     CONTACT("存联系方式", QrContentType.VCARD, "保持联系", "扫一扫，存入通讯录")
 }
 

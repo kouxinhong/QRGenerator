@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.qrgenerator.ui.navigation.BottomNavBar
+import com.example.qrgenerator.ui.navigation.BottomNavItem
 import com.example.qrgenerator.ui.navigation.NavGraph
 import com.example.qrgenerator.ui.theme.QRGeneratorTheme
 
@@ -37,7 +38,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         savedInstanceState?.getString("qr_draft")?.let { json ->
-            runCatching { configHolder.executeSetConfig(QrConfigSerializer.deserialize(json)) }
+            runCatching {
+                val restored = QrConfigSerializer.deserialize(json)
+                if (restored != configHolder.config.value) configHolder.executeSetConfig(restored)
+            }
                 .onFailure { Toast.makeText(this, "上次填写的内容未能恢复，请重新填写", Toast.LENGTH_LONG).show() }
         }
         setContent {
@@ -58,12 +62,18 @@ class MainActivity : ComponentActivity() {
                         BottomNavBar(
                             currentRoute = currentRoute,
                             onNavigate = { route ->
-                                navController.navigate(route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        saveState = true
+                                // 换样式是制作页的子页面，切换标签前先退出，避免保存后又立即恢复它。
+                                if (currentRoute == BottomNavItem.STYLE.route) {
+                                    navController.popBackStack(BottomNavItem.GENERATE.route, false)
+                                }
+                                if (navController.currentDestination?.route != route) {
+                                    navController.navigate(route) {
+                                        popUpTo(navController.graph.startDestinationId) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
                             }
                         )

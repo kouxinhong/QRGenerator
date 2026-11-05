@@ -55,6 +55,7 @@ object QrContentCodec {
     }
 
     fun preview(type: QrContentType, content: String): String {
+        if (type == QrContentType.TEXT) return QrPayloadParser.parse(content).summary
         val values: Map<String, String> = fields(type, content)
         return when (type) {
             QrContentType.WIFI, QrContentType.ENTERPRISE_WIFI -> "Wi-Fi：${values["ssid"].orEmpty()}"
@@ -65,6 +66,8 @@ object QrContentCodec {
     }
 
     fun encode(config: QrConfig): QrData {
+        config.sourcePayload?.takeIf { it.contentType == config.contentType && it.formContent == config.content }
+            ?.let { return QrData.Text(it.rawPayload) }
         val f: Map<String, String> = fields(config.contentType, config.content)
         fun get(key: String): String = f[key].orEmpty()
         fun optional(key: String): String? = f[key]?.takeIf { it.isNotBlank() }

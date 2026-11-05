@@ -87,9 +87,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel()) {
             QrErrorLevel.entries.indexOf(settings.defaultErrorLevel), {
                 viewModel.onEvent(SettingsEvent.UpdateErrorLevel(QrErrorLevel.entries[it])); dialog = null
             }, { dialog = null })
-        "help" -> InfoDialog("三个步骤就能做好", "1. 选文字、网址或 Wi-Fi，按提示填写。\n\n2. 点“换样式”，挑喜欢的形状、颜色和小图。\n\n3. 返回预览，点“保存到相册”或“分享”。\n\n做好后，用另一台手机扫一扫。深色图案、浅色背景更容易扫出来。", { dialog = null })
-        "about" -> InfoDialog("关于二维码生成器", "版本 $versionName\n\n内容和图片在本机处理，无需注册。\n\n保存或分享后的作品会留在“已保存”，点开即可继续编辑。删除应用会同时移除应用内的记录。\n\n基于开源 custom-qr-generator（MIT）与 ZXing 制作。", { dialog = null })
-        "privacy" -> InfoDialog("数据与权限", "二维码在本机生成，不需要联网。填写的内容、导入的小图和背景、已保存记录会存放在应用内。\n\n从相册选图时，只读取你选中的图片；拍照会打开系统相机。Android 8 和 9 保存到相册时需要存储权限，也可以选择“保存为文件”。\n\n主动分享时，接收的应用可以读取该二维码图片。删除应用内记录不会删除已导出到相册或文件夹的图片。", { dialog = null })
+        "help" -> InfoDialog("三个步骤就能做好", "1. 选择连 Wi-Fi、分享页面或留联系方式，也可以导入已有二维码。\n\n2. 填写或识别内容，预览自动排好的小卡。“换个样式”是可选操作。\n\n3. 保存到相册、分享，或保存打印 PDF。打印时选择实际大小（100%），按裁切线裁剪。\n\n使用前请用另一台手机试扫；网址或网络密码改变后，需要重新制作二维码。", { dialog = null })
+        "about" -> InfoDialog("关于二维码生成器", "版本 $versionName\n\n内容和图片在本机处理，无需注册。\n\n保存或分享后的作品会留在“已保存”，点开即可继续编辑。删除应用会同时移除应用内的记录。\n\n基于 custom-qr-generator（MIT）、ZXing、WeChatQRCode、OpenCV 和 AndroidX CameraX（Apache 2.0）等开源项目制作。", { dialog = null })
+        "privacy" -> InfoDialog("数据与权限", "二维码制作和识别都在本机完成，不会上传内容或图片。填写的内容、导入的图片和已保存记录存放在应用内；未处理的扫码结果只用于恢复本次操作，不自动加入永久扫码历史。\n\n应用内扫一扫需要相机权限。从图片识别不需要相机权限，只读取你选中的图片。Logo 拍照会打开系统相机。Android 8 和 9 保存到相册时需要存储权限，也可以选择“保存为文件”。\n\nWi-Fi 二维码包含连接信息，显示时隐藏密码不代表加密。主动复制原文或分享二维码后，接收方可以读取其中内容。删除应用内记录不会删除已导出的图片或文件。", { dialog = null })
         "reset" -> AlertDialog(
             onDismissRequest = { dialog = null }, title = { Text("恢复默认设置？") },
             text = { Text("将恢复跟随系统的外观、高清 1024 像素、PNG 文件和自动识别保护。当前内容、图片样式和已保存记录会保留。") },
